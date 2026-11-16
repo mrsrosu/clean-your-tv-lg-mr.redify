@@ -4,7 +4,8 @@ Date: 2026-11-16. Status: draft for review. Branch: `features` (local, not pushe
 
 ## Purpose
 
-Add four user-configurable features to the mr.redify Home fork, each with its own
+Add four user-configurable features to the mr.redify Home fork (active only with the
+mr.redify theme, see "Scoping"), each with its own
 tab in **Settings**, so that anyone who installs this fork gets what the owner has:
 
 1. **Idle screen** (Ecran de repaus), started by Home after inactivity.
@@ -28,12 +29,31 @@ existing Home i18n; Romanian content (holidays, name days) is Romanian only.
 | Football | **Both** favourite teams (1 to 5) and competitions. **No standings.** Source: ESPN public endpoints. |
 | Where it is viewed | One new header button (calendar icon) opens a **full-screen panel with three pages**: Calendar, Exchange rate, Football (left/right to switch). |
 | Distribution | Public fork `mrsrosu/clean-your-tv-lg-mr.redify`. The theme repo `cytv-themes-mr-redify` stays as is. |
+| Scope | **Only the mr.redify theme** (owner decision, 2026-11-16). Other themes behave exactly as upstream. |
 
-Assumptions to confirm in review (not yet answered by the owner):
-- The features are available for **all themes**, not only mr.redify. Only the header
-  button position/appearance follows the active theme's header.
+Assumption to confirm in review (not yet answered by the owner):
 - Info panel blocks default to on for date/name day, off for exchange rate and football
   until the user enables them.
+
+## Scoping to the mr.redify theme
+
+All four features are active only while the mr.redify theme is the active theme, using
+the mechanism already in the fork: `ThemeRuntime.apply/reset` in
+`launcher/theme-runtime.js` toggles the class `ctv-mr-redify` on `#homeSurface` for the
+theme IDs `github:mrsrosu/cytv-themes-mr-redify:mr-redify` and
+`github:local/my-themes:mr-redify`. The new code reads the same signal (one shared
+helper, for example `isMrRedify()`, as already used in `launcher/weather.js`).
+
+When another theme is active:
+- the four Settings tabs are not shown;
+- the header calendar button is not shown;
+- the idle screen does not start (the timer is stopped, not just hidden);
+- no background requests are made (BNR, ESPN).
+
+Saved settings, own events and favourite teams are kept when the user switches theme,
+and become active again when mr.redify is selected. Switching theme while the info
+panel or idle screen is open closes it first. Tests cover both states (mr.redify and
+another theme such as Classic).
 
 ## Architecture
 
