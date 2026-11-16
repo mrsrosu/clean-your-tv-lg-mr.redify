@@ -39,6 +39,26 @@
   function t(text) {
     return root.HomeI18n ? root.HomeI18n.t(text) : text;
   }
+  // Provider clocks are minutes ("34'") or, from TheSportsDB, status codes; codes are translated, minutes pass through.
+  function clockText(c) {
+    switch (c) {
+      case 'HT':
+        return t('Half time');
+      case 'ET':
+        return t('Extra time');
+      case 'P':
+        return t('Penalties');
+      case 'BT':
+        return t('Break');
+      case '1H':
+      case '2H':
+      case 'LIVE':
+        return t('Live');
+      case 'FT':
+        return t('FT');
+    }
+    return c || '';
+  }
   function competitionName(id) {
     var list = espn ? espn.competitions : [];
     for (var i = 0; i < list.length; i++)
@@ -433,7 +453,7 @@
       if (x.status.live)
         line =
           scoreText(x.status.live) +
-          (x.status.live.clock ? ' ' + x.status.live.clock : '');
+          (x.status.live.clock ? ' ' + clockText(x.status.live.clock) : '');
       else if (x.status.next)
         line =
           versus(x.status.next) +
@@ -502,7 +522,7 @@
           line(
             box,
             'fb-live',
-            t('Live') + (st.live.clock ? ' ' + st.live.clock : ''),
+            t('Live') + (st.live.clock ? ' ' + clockText(st.live.clock) : ''),
             scoreText(st.live)
           );
         if (st.next)
@@ -556,8 +576,8 @@
               m.state === 'pre'
                 ? timeOf(m.start)
                 : m.state === 'in'
-                  ? m.clock || t('Live')
-                  : 'FT'
+                  ? clockText(m.clock) || t('Live')
+                  : t('FT')
             )
           );
           row.appendChild(el('span', 'fb-home', m.home.name));
@@ -566,7 +586,7 @@
               'span',
               'fb-score',
               m.state === 'pre'
-                ? 'v'
+                ? t('vs')
                 : (m.home.score === null ? '?' : m.home.score) +
                     ' - ' +
                     (m.away.score === null ? '?' : m.away.score)
@@ -795,6 +815,7 @@
     teamStatus: teamStatus,
     refresh: refresh,
     idleLines: idleLines,
+    clockText: clockText,
     setClock: function (fn) {
       clock = fn;
     }

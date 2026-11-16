@@ -343,6 +343,18 @@ test('refresh: nothing configured -> empty, no request', async () => {
   assert.equal(ctx.requests.length, 0);
   assert.deepEqual(ctx.HomeFootball.idleLines(), []);
 });
+test('clockText: status codes go through HomeI18n.t, minutes pass through (M8)', () => {
+  const ctx = context(memory(), {}, { HomeI18n: { t: (k) => 'RO:' + k } }),
+    F = ctx.HomeFootball;
+  assert.equal(F.clockText("34'"), "34'");
+  assert.equal(F.clockText(''), '');
+  assert.equal(F.clockText('HT'), 'RO:Half time');
+  assert.equal(F.clockText('1H'), 'RO:Live');
+  assert.equal(F.clockText('2H'), 'RO:Live');
+  assert.equal(F.clockText('ET'), 'RO:Extra time');
+  assert.equal(F.clockText('P'), 'RO:Penalties');
+  assert.equal(F.clockText('FT'), 'RO:FT');
+});
 test('refresh: loads scoreboard + team matches, idleLines from cache only', async () => {
   const mem = memory(),
     ctx = context(mem, routes());

@@ -395,6 +395,16 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
     'old team id re-resolved by name'
   );
 
+  // M8: the "not started" separator goes through HomeI18n.t ("vs"); status codes are covered in football.cjs (clockText).
+  await setup(full);
+  await open();
+  await page.waitForSelector('#infoPanel .fb-match');
+  assert.equal(
+    (await page.locator('#infoPanel .fb-match .fb-score').first().innerText()).trim(),
+    'vs'
+  );
+  await page.evaluate(() => InfoPanel.close());
+
   assert.deepEqual(home.errors, [], 'no page errors');
   await home.close();
   console.log('PASS football-ui');
