@@ -105,8 +105,9 @@ the TV web engine is older than desktop Chrome.
 ## Feature 2: exchange rate, holidays, name days
 
 ### Holidays and name days (offline)
-- Fixed legal holidays: 1-2 Jan, 24 Jan, 1 May, 1 Jun, 15 Aug, 30 Nov, 1 Dec,
-  25-26 Dec. Movable: Good Friday, Orthodox Easter Sunday and Monday, Pentecost Sunday
+- Fixed legal holidays: 1-2 Jan, 6-7 Jan, 24 Jan, 1 May, 1 Jun, 15 Aug, 30 Nov,
+  1 Dec, 25-26 Dec (6-7 Jan added after review; the whole list is still subject to the
+  verification below). Movable: Good Friday, Orthodox Easter Sunday and Monday, Pentecost Sunday
   and Monday, computed with the Orthodox Easter algorithm for any year.
 - **To verify before bundling:** the list of legal holidays against the official source
   (the list changed in recent years, for example 25 October), and a sample of the
