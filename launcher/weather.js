@@ -206,14 +206,15 @@
           '</div>';
     }
     if (format === 'forecast') {
-      const low = Math.min(...w.days.map((d) => d.low)),
-        high = Math.max(...w.days.map((d) => d.high)),
+      const shownDays = w.days.slice(0, isMrRedify() ? 3 : 4),
+        low = Math.min(...shownDays.map((d) => d.low)),
+        high = Math.max(...shownDays.map((d) => d.high)),
         span = high - low;
       html +=
         '<div class="weather-rule"></div>' +
-        (!w.days.length
+        (!shownDays.length
           ? t('No forecast')
-          : w.days
+          : shownDays
               .map(
                 (d, index) =>
                   '<div class="weather-row"><span class="ctv-weather-day">' +
@@ -318,6 +319,14 @@
       );
     }
   }
+  // Local mr.redify fork: this theme shows 3 forecast days and moves weather to the left.
+  function isMrRedify() {
+    const surface = doc.getElementById('homeSurface');
+    return !!surface && surface.classList.contains('ctv-mr-redify');
+  }
+  function formatLabel(format) {
+    return format === 'forecast' && isMrRedify() ? '3 days' : formatLabels[format];
+  }
   function position(node) {
     let left = 0,
       top = 0;
@@ -387,9 +396,19 @@
           buttons = position(doc.getElementById('topButtons')),
           scale = a.options.scale;
         const width = effective === 'text' ? 920 : 660;
+        // Local mr.redify fork: on dock-grid, weather of every format sits at the left under the clock.
+        const weatherLeft =
+          state.preset === 'dock-grid' && isMrRedify();
         let left =
-            effective === 'text' ? header.left : 1920 - 112 - width * scale,
-          top = effective === 'text' ? time.bottom + 20 : buttons.bottom + 26;
+            effective === 'text' || weatherLeft
+              ? header.left
+              : 1920 - 112 - width * scale,
+          top =
+            effective === 'text'
+              ? time.bottom + 20
+              : weatherLeft
+                ? time.bottom + 26
+                : buttons.bottom + 26;
         if (state.preset === 'side-grid') {
           left = effective === 'text' ? 560 : 1920 - 112 - width * scale;
           top = effective === 'text' ? 100 : 72;
@@ -420,7 +439,10 @@
           previewSheet.id = 'weatherPreviewStyle';
           doc.head.appendChild(previewSheet);
         }
-        if (state.preset === 'dock-grid' || state.preset === 'scenic-grid') {
+        if (
+          (state.preset === 'dock-grid' && !weatherLeft) ||
+          state.preset === 'scenic-grid'
+        ) {
           hero.style.maxWidth =
             effective === 'text'
               ? ''
@@ -443,7 +465,7 @@
     text: 'Compact',
     current: 'Now',
     details: 'In detail',
-    forecast: '4 days'
+    forecast: '3 days'
   };
   const sourceNames = { 'met-no': 'MET Norway', 'open-meteo': 'Open-Meteo' };
   let settingsHost,
@@ -518,7 +540,7 @@
       .forEach(
         (b) =>
           (b.querySelector('.weather-format-title').textContent = t(
-            formatLabels[b.dataset.weatherChoice]
+            formatLabel(b.dataset.weatherChoice)
           ))
       );
     const toggle = settingsHost.querySelector('.weather-enabled');
@@ -554,7 +576,7 @@
       !format || !options.enabled;
     const liveData = storeState().data;
     settingsHost.querySelector('.weather-live-title').textContent = format
-      ? t(formatLabels[format]) + (liveData ? '' : ' · ' + t('Example'))
+      ? t(formatLabel(format)) + (liveData ? '' : ' · ' + t('Example'))
       : '';
     settingsHost.querySelector('.weather-live-preview').hidden =
       !format || !options.enabled;

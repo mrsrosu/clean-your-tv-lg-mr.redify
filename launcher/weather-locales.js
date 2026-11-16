@@ -66,6 +66,7 @@ window.WeatherLocales = {
     'Now': 'Now',
     'In detail': 'In detail',
     '4 days': '4 days',
+    '3 days': '3 days',
     'Choose city': 'Choose city',
     'Not determined': 'Not determined',
     'Back': 'Back'
@@ -137,6 +138,7 @@ window.WeatherLocales = {
     'Now': 'Сейчас',
     'In detail': 'Подробно',
     '4 days': 'На 4 дня',
+    '3 days': 'На 3 дня',
     'Choose city': 'Выбрать город',
     'Not determined': 'Не определён',
     'Back': 'Назад'
@@ -208,6 +210,7 @@ window.WeatherLocales = {
     'Now': 'Nyní',
     'In detail': 'Podrobně',
     '4 days': 'Na 4 dny',
+    '3 days': 'Na 3 dny',
     'Choose city': 'Vybrat město',
     'Not determined': 'Neurčeno',
     'Back': 'Zpět'
@@ -281,6 +284,7 @@ window.WeatherLocales = {
     'Now': 'Aktuell',
     'In detail': 'Ausführlich',
     '4 days': '4 Tage',
+    '3 days': '3 Tage',
     'Choose city': 'Stadt wählen',
     'Not determined': 'Nicht ermittelt',
     'Back': 'Zurück'
@@ -353,6 +357,7 @@ window.WeatherLocales = {
     'Now': 'Ahora',
     'In detail': 'En detalle',
     '4 days': '4 días',
+    '3 days': '3 días',
     'Choose city': 'Elegir ciudad',
     'Not determined': 'Sin determinar',
     'Back': 'Atrás'
@@ -423,6 +428,7 @@ window.WeatherLocales = {
     'Now': 'Agora',
     'In detail': 'Detalhado',
     '4 days': '4 dias',
+    '3 days': '3 dias',
     'Choose city': 'Escolher cidade',
     'Not determined': 'Não identificada',
     'Back': 'Voltar'
@@ -494,6 +500,7 @@ window.WeatherLocales = {
     'Now': 'Maintenant',
     'In detail': 'En détail',
     '4 days': '4 jours',
+    '3 days': '3 jours',
     'Choose city': 'Choisir une ville',
     'Not determined': 'Non déterminée',
     'Back': 'Retour'
@@ -565,6 +572,7 @@ window.WeatherLocales = {
     'Now': 'Ora',
     'In detail': 'In dettaglio',
     '4 days': '4 giorni',
+    '3 days': '3 giorni',
     'Choose city': 'Scegli città',
     'Not determined': 'Non rilevata',
     'Back': 'Indietro'
@@ -636,6 +644,7 @@ window.WeatherLocales = {
     'Now': '현재',
     'In detail': '자세히',
     '4 days': '4일 예보',
+    '3 days': '3일 예보',
     'Choose city': '도시 선택',
     'Not determined': '확인되지 않음',
     'Back': '뒤로'
@@ -707,6 +716,7 @@ window.WeatherLocales = {
     'Now': 'अभी',
     'In detail': 'विस्तार से',
     '4 days': '4 दिन',
+    '3 days': '3 दिन',
     'Choose city': 'शहर चुनें',
     'Not determined': 'पता नहीं चला',
     'Back': 'वापस'
@@ -778,6 +788,7 @@ window.WeatherLocales = {
     'Now': 'Teraz',
     'In detail': 'Szczegóły',
     '4 days': '4 dni',
+    '3 days': '3 dni',
     'Choose city': 'Wybierz miasto',
     'Not determined': 'Nie ustalono',
     'Back': 'Wstecz'
@@ -847,6 +858,7 @@ window.WeatherLocales = {
     'Now': '当前',
     'In detail': '详细',
     '4 days': '4 天',
+    '3 days': '3 天',
     'Choose city': '选择城市',
     'Not determined': '未确定',
     'Back': '返回'
@@ -916,6 +928,7 @@ window.WeatherLocales = {
     'Now': '目前',
     'In detail': '詳細',
     '4 days': '4 天',
+    '3 days': '3 天',
     'Choose city': '選擇城市',
     'Not determined': '未判斷',
     'Back': '返回'

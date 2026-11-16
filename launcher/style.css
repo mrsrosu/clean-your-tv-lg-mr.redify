@@ -203,6 +203,23 @@ body.scrolled header {
 .pill.focused {
   transform: scale(1.04);
 }
+/* Local mr.redify fork: only when the mr.redify theme is active. */
+#homeSurface.ctv-mr-redify #topButtons .pill {
+  width: 84px;
+  padding: 0;
+  justify-content: center;
+}
+#homeSurface.ctv-mr-redify #topButtons .pill svg {
+  margin-right: 0;
+}
+#homeSurface.ctv-mr-redify #topButtons .pill > span {
+  display: none;
+}
+#homeSurface.ctv-mr-redify[data-layout='dock-grid'] #hero {
+  left: auto;
+  right: 136px;
+  text-align: right;
+}
 /* ---- grid ------------------------------------------------------------------------------------ */
 #viewport {
   position: absolute;

@@ -510,6 +510,16 @@
     var surface = root.document.getElementById('homeSurface');
     if (surface) {
       surface.classList.add('ctv-theme-active');
+      // mr.redify fork: scope the fork's layout tweaks to the mr.redify theme only
+      // (published ID, plus the local ID used while developing the theme).
+      surface.classList[
+        [
+          'github:mrsrosu/cytv-themes-mr-redify:mr-redify',
+          'github:local/my-themes:mr-redify'
+        ].indexOf(manifest.id) >= 0
+          ? 'add'
+          : 'remove'
+      ]('ctv-mr-redify');
       surface.classList[
         manifest.layout.motion === 'classic' ? 'add' : 'remove'
       ]('ctv-classic-motion');
@@ -550,6 +560,7 @@
     if (surface) {
       surface.classList.remove('ctv-theme-active');
       surface.classList.remove('ctv-classic-motion');
+      surface.classList.remove('ctv-mr-redify');
     }
     release(previous && previous.handles, null);
     if (root.HomePresentationController)
