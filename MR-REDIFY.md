@@ -27,7 +27,7 @@ Data sources and limits:
 
 - Football uses unofficial, free public sources that can change, be rate limited or disappear without notice: ESPN's endpoints for the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 and the UEFA competitions, and TheSportsDB's free key for Romanian Liga 1 (ESPN's Liga 1 data was stale). The free TheSportsDB key allows only a few requests per minute, so Liga 1 updates at most about once an hour and the live score refresh is slower than for the other leagues. A Liga 1 team followed before this change is matched again by name; if that fails, pick it again in Settings.
 - Exchange rates come from the public BNR XML feed and update once per banking day.
-- The LG system screensaver may start before the idle screen on some TVs. If it does, lengthen or turn off the screensaver in the TV's own settings; the idle screen cannot override it.
+- The LG screensaver also runs over Home (verified on a TV). Turn it off in the TV settings (search for Screen Saver) or set it longer than the time chosen in the Idle screen tab, otherwise it appears on top of the idle screen; the idle screen cannot override it. The idle screen only works while Home is in the foreground.
 - Nothing leaves the TV except requests for public data (BNR, ESPN, TheSportsDB, weather). Your events, picks and settings stay on the TV.
 
 ## Install

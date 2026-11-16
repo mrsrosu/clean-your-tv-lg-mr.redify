@@ -4,6 +4,10 @@ Question: while Home is in front and nobody touches anything, does Home keep get
 stay running until the idle timeout (10 minutes by default), or does the LG system screensaver take over first? The idle
 screen only works if Home stays running and still receives the wake input.
 
+**Outcome (owner's TV, 16 Nov 2026):** the LG screensaver also runs over Home and appears on top of the idle screen. The Settings
+note therefore tells the user to turn it off in the TV settings (Screen Saver) or set it longer than the idle timeout; the idle
+screen only works while Home is in the foreground.
+
 Nothing here is installed or run by the implementation. This is a procedure for the owner to run on the TV, when they decide.
 
 ## Probe snippet

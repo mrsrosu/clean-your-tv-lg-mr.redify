@@ -341,7 +341,10 @@ const assert = require('node:assert/strict'),
   await page.evaluate(() => RenewalPanel.open());
   await page.locator('[data-category="idle"]').click();
   const pane = page.locator('#settings-pane-idle');
-  assert.match(await pane.innerText(), /screensaver/i);
+  assert.match(await pane.innerText(), /LG screensaver also runs over Home/);
+  assert.match(await pane.innerText(), /Screen Saver/);
+  assert.match(await pane.innerText(), /only works while Home is in the foreground/);
+  assert.doesNotMatch(await pane.innerText(), /only runs outside Home/);
   const cfg = () => page.evaluate(() => HomeInfo.idle.get());
   await pane.locator('.idle-style-panel').click();
   assert.equal((await cfg()).style, 'panel');

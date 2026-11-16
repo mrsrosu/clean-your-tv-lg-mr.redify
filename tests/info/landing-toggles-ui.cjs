@@ -78,6 +78,12 @@ const assert = require('node:assert/strict'),
     await page.evaluate(() => HomeI18n.t('Show name day on main page')),
     'Arată onomastica pe pagina principală'
   );
+  assert.match(
+    await page.evaluate(() =>
+      HomeI18n.t('The LG screensaver also runs over Home. Turn it off in the TV settings (search for Screen Saver) or set it longer than the time chosen here, otherwise it will appear on top of this screen. This screen only works while Home is in the foreground.')
+    ),
+    /^Screensaverul LG rulează și peste Home\. Oprește-l din setările TV-ului \(caută Screen Saver\)/
+  );
   await home.close();
   console.log('PASS landing-toggles-ui');
 })().catch((e) => {

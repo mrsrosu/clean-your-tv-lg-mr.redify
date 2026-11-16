@@ -9,7 +9,8 @@
  * Never starts while Settings is open or Home is not in front (hidden document); an info panel still open at the timeout
  * is closed and idle starts a cycle later. Everything stops when the scope is off.
  * OLED: the content moves a few pixels every minute along a fixed cycle; brightness comes from the shade opacity.
- * Only the idle screen of Home: the LG system screensaver runs outside Home and is not controlled here.
+ * Only the idle screen of Home, and only while Home is in front: the LG screensaver also runs over Home and is not
+ * controlled here (the Settings note tells the user to turn it off or set it longer).
  */
 (function (root) {
   'use strict';
@@ -636,7 +637,7 @@
         'div',
         'idle-note',
         t(
-          'The LG system screensaver is separate and only runs outside Home. Set its timeout longer than this one, or turn it off.'
+          'The LG screensaver also runs over Home. Turn it off in the TV settings (search for Screen Saver) or set it longer than the time chosen here, otherwise it will appear on top of this screen. This screen only works while Home is in the foreground.'
         )
       )
     );

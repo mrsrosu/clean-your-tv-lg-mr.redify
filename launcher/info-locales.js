@@ -14,8 +14,8 @@ HomeI18n.add({
     'Seconds': 'Secunde',
     'Panel blocks': 'Blocurile panoului',
     'Date': 'Data',
-    'The LG system screensaver is separate and only runs outside Home. Set its timeout longer than this one, or turn it off.':
-      'Economizorul de ecran al sistemului LG este separat și rulează doar în afara Home. Setează-i un timp mai lung decât al acestuia sau oprește-l.',
+    'The LG screensaver also runs over Home. Turn it off in the TV settings (search for Screen Saver) or set it longer than the time chosen here, otherwise it will appear on top of this screen. This screen only works while Home is in the foreground.':
+      'Screensaverul LG rulează și peste Home. Oprește-l din setările TV-ului (caută Screen Saver) sau setează-l mai lung decât timpul ales aici, altfel apare peste acest ecran. Acest ecran funcționează doar cât Home este în prim-plan.',
     'Rates & holidays': 'Cursuri și sărbători',
     'Calendar': 'Calendar',
     'Football': 'Fotbal',
