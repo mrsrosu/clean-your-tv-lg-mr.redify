@@ -4,6 +4,7 @@ HomeI18n.add({
   'ro': {
     'Idle screen': 'Ecran de repaus',
     'Show on main page': 'Arată pe pagina principală',
+    'Show name day on main page': 'Arată onomastica pe pagina principală',
     'Rates': 'Cursuri',
     'Style': 'Stil',
     'Clock': 'Ceas',

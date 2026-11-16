@@ -187,9 +187,10 @@
   if (info && info.createStore) {
     daily = info.createStore(
       'tvhome.daily.v1',
-      { showHolidays: true, showNameDays: true },
+      { showHolidays: true, showNameDays: true, landing: false },
       function (raw) {
         var out = {};
+        if ('landing' in raw) out.landing = raw.landing === true;
         if (typeof raw.showHolidays === 'boolean')
           out.showHolidays = raw.showHolidays;
         if (typeof raw.showNameDays === 'boolean')
@@ -643,13 +644,35 @@
     refreshList(false);
   }
 
-  // Main-page card (landing-widgets.js): today's date, holiday, name days and the own event of today or the next one
-  // within 7 days. At most 3 lines; null when the device date is unavailable. Reads stored data only, no request.
-  function landingCard() {
+  // Main page (landing-widgets.js), stored data only, no request.
+  // Month grid of the current month, no markings: { title, weekdays: [7 short names from the week start], rows:
+  // [[0 | day]], today: day number }; 0 = a cell outside the month. null when the device date is unavailable.
+  function landingMonth() {
     var today = readToday();
     if (!today || !calendar) return null;
-    var settings = safe(calendar.get, { events: [] }),
-      marks = safe(daily.get, { showHolidays: true, showNameDays: true }),
+    var weekStart = safe(calendar.get, { weekStart: 'mon' }).weekStart,
+      start = weekStart === 'sun' ? 6 : 0,
+      grid = monthGrid(today.year, today.month, weekStart),
+      weekdays = [],
+      i;
+    for (i = 0; i < 7; i++) weekdays.push(weekdayName((start + i) % 7, true));
+    return {
+      title: monthName(today.month) + ' ' + today.year,
+      weekdays: weekdays,
+      today: today.day,
+      rows: grid.map(function (row) {
+        return row.map(function (cell) {
+          return cell.inMonth ? cell.day : 0;
+        });
+      })
+    };
+  }
+  // Name day card: the names celebrated today (when name days are marked), then the holiday name(s) (when holidays are
+  // marked), at most 2 lines; null when there is nothing to show.
+  function landingNameDay() {
+    var today = readToday();
+    if (!today || !daily) return null;
+    var marks = safe(daily.get, { showHolidays: true, showNameDays: true }),
       lines = [],
       holidays = safe(function () {
         return marks.showHolidays
@@ -660,43 +683,18 @@
         return marks.showNameDays
           ? root.HomeRoCalendar.nameDays(today.year, today.month, today.day)
           : [];
-      }, []),
-      own = eventsOn(settings.events, today.year, today.month, today.day),
-      i,
-      day;
+      }, []);
+    // Title is the card's own ("Name day"), no date; names first, a holiday name under them.
+    if (names.length) lines.push(names.join(', '));
     if (holidays.length) lines.push(holidays.join(', '));
-    if (names.length) lines.push(t('Name day') + ': ' + names.join(', '));
-    if (own.length) lines.push(t('Your event') + ': ' + own[0].title);
-    else
-      for (i = 1; i <= 7; i++) {
-        day = shift(today, i);
-        own = eventsOn(settings.events, day.year, day.month, day.day);
-        if (own.length) {
-          lines.push(
-            t('Next') +
-              ': ' +
-              own[0].title +
-              ' · ' +
-              two(day.day) +
-              '.' +
-              two(day.month)
-          );
-          break;
-        }
-      }
-    return {
-      title:
-        weekdayName(weekdayOf(today.year, today.month, today.day), false) +
-        ', ' +
-        today.day +
-        ' ' +
-        monthName(today.month),
-      lines: lines.slice(0, 3)
-    };
+    return lines.length
+      ? { title: t('Name day'), lines: lines.slice(0, 2) }
+      : null;
   }
 
   root.HomeCalendar = {
-    landingCard: landingCard,
+    landingMonth: landingMonth,
+    landingNameDay: landingNameDay,
     monthGrid: monthGrid,
     isoWeek: isoWeek,
     sanitizeEvents: sanitizeEvents,

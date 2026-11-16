@@ -163,13 +163,17 @@
     return out;
   }
 
-  // Main-page card (landing-widgets.js): the chosen currencies (at most 4) and the BNR publication date, from the
-  // stored data only. null without data.
+  // Main-page card (landing-widgets.js): the chosen currencies in two lines of two (at most 4) and the BNR publication
+  // date, from the stored data only. null without data.
   function landingCard() {
     var s = store && store.get(),
-      lines = idleLines().slice(0, 4),
-      m;
-    if (!s || !s.current || !lines.length) return null;
+      all = idleLines().slice(0, 4),
+      lines = [],
+      m,
+      i;
+    if (!s || !s.current || !all.length) return null;
+    for (i = 0; i < all.length; i += 2)
+      lines.push(all.slice(i, i + 2).join('  '));
     m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s.current.date);
     return {
       title: t('Exchange rates'),
@@ -431,6 +435,26 @@
     rowL.appendChild(landing);
     sl.appendChild(rowL);
     syncLanding();
+    // Second toggle: the Name day card (stored with the calendar marks in tvhome.daily.v1).
+    if (info.daily) {
+      var rowN = el('div', 'fin-field'),
+        nameday = button('fin-toggle fin-toggle-nameday');
+      nameday.onclick = function () {
+        info.daily.set({ landing: !info.daily.get().landing });
+        syncNameday();
+      };
+      rowN.appendChild(
+        el('span', 'fin-field-label', t('Show name day on main page'))
+      );
+      rowN.appendChild(nameday);
+      sl.appendChild(rowN);
+      syncNameday();
+    }
+    function syncNameday() {
+      var on = info.daily.get().landing === true;
+      nameday.textContent = on ? t('On') : t('Off');
+      pressed(nameday, on);
+    }
     if (daily) {
       var s1 = section(t('Calendar marks'));
       toggleRow(s1, t('Holidays'), 'showHolidays');

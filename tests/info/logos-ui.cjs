@@ -68,10 +68,10 @@ function match(id, state, home, away, start, hs, as, clock) {
       src: i.getAttribute('src')
     }))
   );
-  assert.ok(card.length >= 3, 'logos in the card: ' + card.length);
+  assert.ok(card.length >= 2, 'logos in the card (the live match): ' + card.length);
   card.forEach((i) => {
-    assert.equal(i.w, '24');
-    assert.equal(i.h, '24');
+    assert.equal(i.w, '22');
+    assert.equal(i.h, '22');
     assert.equal(i.alt, '');
     assert.match(i.src, /^https:\/\/(a\.espncdn\.com|a1\.espncdn\.com|www\.thesportsdb\.com|r2\.thesportsdb\.com)\//);
   });

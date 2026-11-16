@@ -230,7 +230,7 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
   assert.equal(await pane.isVisible(), true);
   assert.equal(
     await pane.locator('.fin-toggle').count(),
-    3, // landing + holidays + name days
+    4, // Rates + Name day landing toggles, holidays, name days
     'real tab, not placeholder'
   );
   assert.equal(

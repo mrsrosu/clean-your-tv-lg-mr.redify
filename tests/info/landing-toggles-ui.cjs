@@ -8,6 +8,7 @@ const assert = require('node:assert/strict'),
     tabs = [
       { id: 'calendar', store: 'calendar', cls: 'cal-landing' },
       { id: 'daily', store: 'finance', cls: 'fin-toggle-landing' },
+      { id: 'daily', store: 'daily', cls: 'fin-toggle-nameday', second: true },
       { id: 'football', store: 'football', cls: 'fb-landing' }
     ];
   // Defaults and sanitizing (stored garbage reads false; set() with a non-boolean stores false).
@@ -23,7 +24,8 @@ const assert = require('node:assert/strict'),
       const key = {
         calendar: 'tvhome.calendar.v1',
         finance: 'tvhome.finance.v1',
-        football: 'tvhome.football.v1'
+        football: 'tvhome.football.v1',
+        daily: 'tvhome.daily.v1'
       }[s];
       localStorage.setItem(key, '{"landing":"x"}');
       out.push(HomeInfo[s].get().landing);
@@ -36,9 +38,10 @@ const assert = require('node:assert/strict'),
   for (const t of tabs) {
     await page.locator('[data-category="' + t.id + '"]').click();
     const pane = page.locator('#settings-pane-' + t.id),
-      first = pane.locator('button').first();
-    assert.equal(await first.evaluate((b, c) => b.classList.contains(c), t.cls), true, t.id + ' first control');
-    assert.match(await pane.innerText(), /Show on main page/);
+      nth = t.second ? 1 : 0,
+      first = pane.locator('button').nth(nth);
+    assert.equal(await first.evaluate((b, c) => b.classList.contains(c), t.cls), true, t.id + ' ' + t.cls + ' control (first' + (t.second ? ' two' : '') + ')');
+    assert.match(await pane.innerText(), t.second ? /Show name day on main page/ : /Show on main page/);
     assert.equal(await first.innerText(), 'Off');
     assert.equal(await first.getAttribute('aria-pressed'), 'false');
     // Remote path: focus + Enter on a real button.
@@ -49,7 +52,7 @@ const assert = require('node:assert/strict'),
       true,
       t.id + ' ON'
     );
-    const again = pane.locator('button').first();
+    const again = pane.locator('button').nth(nth);
     assert.equal(await again.innerText(), 'On');
     assert.equal(await again.getAttribute('aria-pressed'), 'true');
     await again.click();
@@ -71,6 +74,10 @@ const assert = require('node:assert/strict'),
     'Arată pe pagina principală'
   );
   assert.equal(await page.evaluate(() => HomeI18n.t('Idle screen')), 'Ecran de repaus');
+  assert.equal(
+    await page.evaluate(() => HomeI18n.t('Show name day on main page')),
+    'Arată onomastica pe pagina principală'
+  );
   await home.close();
   console.log('PASS landing-toggles-ui');
 })().catch((e) => {

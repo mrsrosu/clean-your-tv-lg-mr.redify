@@ -64,14 +64,24 @@ test('monthGrid sunday start and february edge cases', () => {
     29
   );
 });
-test('daily store defaults and sanitize', () => {
+test('daily store defaults and sanitize (landing = Name day card, boolean only, default false)', () => {
   const mem = memory(),
     d = context(mem).HomeInfo.daily;
-  assert.deepEqual(d.get(), { showHolidays: true, showNameDays: true });
+  assert.deepEqual(d.get(), {
+    showHolidays: true,
+    showNameDays: true,
+    landing: false
+  });
   assert.deepEqual(d.set({ showHolidays: false, showNameDays: 'x' }), {
     showHolidays: false,
-    showNameDays: true
+    showNameDays: true,
+    landing: false
   });
+  assert.equal(d.set({ landing: true }).landing, true);
+  assert.equal(d.set({ landing: 'yes' }).landing, false);
+  assert.equal(d.set({ landing: 1 }).landing, false);
+  mem.data['tvhome.daily.v1'] = '{"landing":"x","showHolidays":false}';
+  assert.deepEqual(d.get(), { showHolidays: false, showNameDays: true, landing: false });
   assert.ok('tvhome.daily.v1' in mem.data);
 });
 test('calendar store defaults', () => {

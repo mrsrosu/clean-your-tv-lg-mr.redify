@@ -1,7 +1,8 @@
 'use strict';
 const assert = require('node:assert/strict'),
   { openHome } = require('./harness.cjs');
-// Main-page widget cards (mr.redify only): visibility matrix, content, geometry at 1920x1080, timers and requests.
+// Main-page widgets (mr.redify only): month grid + Name day / Exchange / Football cards. Visibility matrix, content,
+// three-column geometry at 1920x1080 (weather | grid | cards), timers and requests.
 const NOW = '2026-11-16T12:00:00Z'; // a Monday
 const RATES = {
   date: '2026-11-16',
@@ -24,7 +25,7 @@ function m(id, home, away, state, start, hs, as, clock) {
     clock: clock || ''
   };
 }
-// Seeds every source and clock; the three toggles are set by the caller.
+// Seeds every source and clock; the toggles are set by the caller.
 async function seed(page, opts) {
   opts = opts || {};
   await page.evaluate(
@@ -34,17 +35,7 @@ async function seed(page, opts) {
       HomeFootball.setClock(() => new Date(NOW));
       HomeInfo.daily.set({ showHolidays: true, showNameDays: true });
       HomeInfo.calendar.set({
-        events: opts.noEvents
-          ? []
-          : [
-              {
-                id: 'e1',
-                day: 20,
-                month: 11,
-                title: 'Dentist appointment',
-                yearly: true
-              }
-            ]
+        events: [{ id: 'e1', day: 20, month: 11, title: 'Dentist appointment', yearly: true }]
       });
       if (!opts.noRates)
         HomeInfo.finance.set({
@@ -82,8 +73,7 @@ async function seed(page, opts) {
     { NOW, RATES, opts }
   );
 }
-// The real space between the header buttons and the app name (about 310 px) holds two small cards; the content tests
-// give the stack room, the geometry test uses the real values too.
+// Generous space for the content tests (the geometry tests use the real positions).
 const room = (page, on) =>
   page.evaluate((v) => {
     const hero = document.getElementById('hero'),
@@ -95,13 +85,32 @@ const room = (page, on) =>
 const toggles = (page, on) =>
   page.evaluate((v) => {
     HomeInfo.calendar.set({ landing: v.calendar });
+    HomeInfo.daily.set({ landing: v.nameday });
     HomeInfo.finance.set({ landing: v.rates });
     HomeInfo.football.set({ landing: v.football });
   }, on);
 const state = (page) => page.evaluate(() => HomeLanding.state());
 const visible = (page) => page.evaluate(() => HomeLanding.visible());
-const ALL = { calendar: true, rates: true, football: true };
-const NONE = { calendar: false, rates: false, football: false };
+const ALL = { calendar: true, nameday: true, rates: true, football: true };
+const NONE = { calendar: false, nameday: false, rates: false, football: false };
+const ORDER = ['calendar', 'nameday', 'rates', 'football'];
+// Real weather block stand-in (no weather data in the harness): left 112, top = clock row bottom + 26, like weather.js.
+const weather = (page, width) =>
+  page.evaluate((w) => {
+    const el = document.getElementById('homeWeather'),
+      tr = document.getElementById('timeRow').getBoundingClientRect();
+    el.hidden = !w;
+    if (!w) return;
+    el.style.left = '112px';
+    el.style.top = tr.bottom + 26 + 'px';
+    el.style.width = w + 'px';
+    el.style.height = '220px';
+    el.style.transform = 'scale(1)';
+    el.style.background = 'rgba(255,0,0,.1)';
+  }, width);
+const rect = (sel) =>
+  `(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width, height: b.height }; })()`;
+const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 (async () => {
   const home = await openHome({ mrRedify: true }),
@@ -122,59 +131,111 @@ const NONE = { calendar: false, rates: false, football: false };
   assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
   assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 0, football: 0 });
 
-  // 2. All ON: Calendar, Rates, Football in that order, with data.
+  // 2. All ON: grid, Name day, Exchange, Football in that order, with data.
   await toggles(page, ALL);
   s = await state(page);
-  assert.deepEqual(s.cards, ['calendar', 'rates', 'football']);
+  assert.deepEqual(s.cards, ORDER);
   assert.equal(s.timer, true);
   assert.equal(await visible(page), true);
   const text = await page.evaluate(() => document.getElementById('landingWidgets').textContent);
-  assert.match(text, /Monday, 16 November/);
-  assert.match(text, /Dentist appointment/);
-  assert.match(text, /20\.11/);
-  assert.match(text, /EUR 5\.0912/);
+  assert.match(text, /November 2026/);
+  assert.match(text, /Matei/, 'name day');
+  assert.match(text, /EUR 5\.0912 {2}USD 4\.6871/);
+  assert.match(text, /GBP 5\.7954 {2}CHF 5\.4437/);
   assert.match(text, /16\.11/, 'BNR date');
   assert.match(text, /Arsenal/);
   assert.match(text, /Live 34' · 2 - 1/);
-  assert.match(text, /21\.11 \d\d:\d\d/);
-  assert.match(text, /FT 0 - 3 · 14\.11/);
-  assert.ok((await page.locator('#landingWidgets .lw-line').count()) >= 5);
-  // First refresh happens once on activation (rates, football), none for the calendar.
+  assert.doesNotMatch(text, /Dentist|Next:/, 'no own events on the main page');
+  // Name day card: title is the card's own, no date; first line = the names only.
+  const nd = await page.evaluate(() => {
+    const c = document.querySelector('#landingWidgets [data-lw="nameday"]');
+    return {
+      label: c.querySelector('.lw-label').textContent,
+      lines: Array.prototype.map.call(c.querySelectorAll('.lw-line'), (l) => l.textContent),
+      icon: !!c.querySelector('svg.lw-icon'),
+      meta: !!c.querySelector('.lw-meta')
+    };
+  });
+  assert.equal(nd.label, 'Name day');
+  assert.deepEqual(nd.lines, ['Matei'], 'names only, no holiday today');
+  assert.equal(nd.icon, true);
+  assert.equal(nd.meta, false);
+  assert.doesNotMatch(nd.label + nd.lines.join(' '), /Monday|November|16/, 'no date text on the card');
+  // A holiday (30 November, St Andrew): the names first, the holiday name on a further line.
+  await page.evaluate(() => {
+    HomeCalendar.setClock(() => new Date(2026, 10, 30, 12, 0, 0));
+    HomeLanding.render();
+  });
+  const hol = await page.evaluate(() =>
+    Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-line'), (l) => l.textContent)
+  );
+  assert.equal(hol.length, 2, 'names + holiday: ' + hol.join(' | '));
+  assert.match(hol[0], /Andrei/);
+  assert.match(hol[1], /Andrei/i);
+  await page.evaluate(() => {
+    HomeCalendar.setClock(() => new Date(2026, 10, 16, 12, 0, 0));
+    HomeLanding.render();
+  });
   assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 1, football: 1 });
 
-  // 3. A card without data is left out, no error text.
-  await seed(page, { noRates: true, noEvents: true });
+  // 3. Month grid: all 30 days, weekday header from the week start, today filled, nothing else marked.
+  const grid = await page.evaluate(() => {
+    const g = document.querySelector('#landingWidgets .lw-grid'),
+      cells = Array.prototype.filter.call(g.querySelectorAll('.lw-cell:not(.lw-weekday)'), (c) => c.textContent !== '');
+    return {
+      days: cells.map((c) => c.textContent),
+      weekdays: Array.prototype.map.call(g.querySelectorAll('.lw-weekday'), (c) => c.textContent),
+      today: Array.prototype.map.call(g.querySelectorAll('.lw-today'), (c) => c.textContent),
+      classes: Array.from(new Set(Array.prototype.map.call(g.querySelectorAll('.lw-cell'), (c) => c.className.replace(/\s*lw-today/, '')))),
+      rows: g.querySelectorAll('.lw-row').length
+    };
+  });
+  assert.deepEqual(grid.days, Array.from({ length: 30 }, (_, i) => String(i + 1)));
+  assert.deepEqual(grid.weekdays, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  assert.deepEqual(grid.today, ['16']);
+  assert.deepEqual(grid.classes.sort(), ['lw-cell', 'lw-cell lw-weekday'].sort(), 'no marks: holidays, events, week numbers');
+  assert.equal(grid.rows, 7, 'weekday row + 6 week rows for November 2026');
+  await page.evaluate(() => HomeInfo.calendar.set({ weekStart: 'sun', weekNumbers: true }));
+  assert.equal(await page.locator('#landingWidgets .lw-weekday').first().textContent(), 'Sun');
+  assert.equal(await page.locator('#landingWidgets .lw-weekno').count(), 0);
+  await page.evaluate(() => HomeInfo.calendar.set({ weekStart: 'mon', weekNumbers: false }));
+
+  // 4. A part without data is left out, no error text; Name day follows the calendar marks.
+  await seed(page, { noRates: true });
   await toggles(page, ALL);
-  s = await state(page);
-  assert.deepEqual(s.cards, ['calendar', 'football']);
+  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'football']);
   await seed(page, { noFootball: true });
   await toggles(page, ALL);
-  assert.deepEqual((await state(page)).cards, ['calendar', 'rates']);
-  // Partial toggles.
+  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'rates']);
   await seed(page);
-  await toggles(page, { calendar: false, rates: true, football: false });
+  await toggles(page, ALL);
+  await page.evaluate(() => HomeInfo.daily.set({ showNameDays: false, showHolidays: false }));
+  assert.deepEqual((await state(page)).cards, ['calendar', 'rates', 'football'], 'no marks, no name day card');
+  await page.evaluate(() => HomeInfo.daily.set({ showNameDays: true, showHolidays: true }));
+  // Partial toggles.
+  await toggles(page, { calendar: false, nameday: false, rates: true, football: false });
   assert.deepEqual((await state(page)).cards, ['rates']);
+  await toggles(page, { calendar: true, nameday: true, rates: false, football: false });
+  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday']);
 
-  // 4. Settings change re-renders at once (no clock needed).
-  await page.evaluate(() => HomeInfo.calendar.set({ landing: true }));
-  assert.deepEqual((await state(page)).cards, ['calendar', 'rates']);
-  await page.evaluate(() => HomeInfo.finance.set({ landing: false }));
-  assert.deepEqual((await state(page)).cards, ['calendar']);
+  // 5. Settings change re-renders at once (no clock needed).
+  await page.evaluate(() => HomeInfo.finance.set({ landing: true }));
+  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'rates']);
+  await page.evaluate(() => HomeInfo.calendar.set({ landing: false }));
+  assert.deepEqual((await state(page)).cards, ['nameday', 'rates']);
 
-  // 5. Cards are not focusable and do not take pointer events.
+  // 6. Not focusable, no pointer events.
   await toggles(page, ALL);
   assert.equal(
-    await page.evaluate(
-      () => document.querySelectorAll('#landingWidgets button, #landingWidgets a, #landingWidgets [tabindex]').length
-    ),
+    await page.evaluate(() => document.querySelectorAll('#landingWidgets button, #landingWidgets a, #landingWidgets [tabindex]').length),
     0
   );
   assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('landingWidgets')).pointerEvents), 'none');
 
-  // 6. Hidden while scrolled / editing / weather scrolled / idle screen / info panel / Settings / app picker.
+  // 7. Hidden while scrolled / editing / weather scrolled / idle screen / info panel / Settings / app picker.
   for (const cls of ['scrolled', 'editing', 'weather-scrolled', 'idle-active']) {
     await page.evaluate((c) => document.body.classList.add(c), cls);
-    assert.equal(await visible(page), false, cls + ' hides the cards');
+    assert.equal(await visible(page), false, cls + ' hides the widgets');
     await page.evaluate((c) => document.body.classList.remove(c), cls);
     assert.equal(await visible(page), true, cls + ' removed: back');
   }
@@ -189,77 +250,84 @@ const NONE = { calendar: false, rates: false, football: false };
   await page.evaluate(() => (document.getElementById('appPicker').hidden = true));
   assert.equal(await visible(page), true);
 
-  // 7. Scope off (other theme / Classic): nothing, no timer; back on: cards again.
+  // 8. Scope off (other theme / Classic): nothing, no timer; back on: widgets again.
   await home.setScope(false);
   s = await state(page);
   assert.deepEqual(s.cards, []);
   assert.equal(s.timer, false);
   assert.equal(await visible(page), false);
   await home.setScope(true);
-  assert.deepEqual((await state(page)).cards, ['calendar', 'rates', 'football']);
+  assert.deepEqual((await state(page)).cards, ORDER);
 
-  // 8. Geometry at 1920x1080: right edge 1808, width 360, between the header buttons and the app name, no overlap.
+  // 9. Geometry at 1920x1080, three columns on one row: weather | grid | cards. Real positions (app name at 532).
   await seed(page);
   await toggles(page, ALL);
-  const geo = () =>
-    page.evaluate(() => {
-      const r = (e) => {
-        const b = e.getBoundingClientRect();
-        return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width };
-      };
-      const host = document.getElementById('landingWidgets'),
-        hero = document.getElementById('hero');
-      return {
-        host: r(host),
-        buttons: r(document.getElementById('topButtons')),
-        heroTop: hero.style.top ? parseFloat(hero.style.top) : null,
-        heroRect: r(hero),
-        cards: Array.prototype.map.call(host.children, (c) => ({ cls: c.className, ...r(c) }))
-      };
-    });
-  let g = await geo();
-  assert.equal(g.host.right, 1808, 'right edge = header buttons right edge');
-  assert.equal(g.host.width, 360);
-  assert.ok(g.cards.length >= 1);
-  assert.equal(g.buttons.right, 1808);
-  g.cards.forEach((c) => {
-    assert.ok(c.top >= g.buttons.bottom, 'below the header buttons');
-    assert.equal(c.right, 1808);
-    assert.equal(c.width, 360);
-    if (g.heroTop !== null) assert.ok(c.bottom <= g.heroTop, 'above the app name: ' + c.bottom + ' <= ' + g.heroTop);
-  });
-  for (let i = 1; i < g.cards.length; i++) {
-    const gap = g.cards[i].top - g.cards[i - 1].bottom;
-    assert.ok(gap >= 12 && gap <= 16, 'about 14 px gap: ' + gap);
-  }
-  // The real positions of this layout (app name at 532): at least two cards fit, none touches the app name.
+  await weather(page, 660);
   await room(page, false);
   await page.evaluate(() => HomeLanding.render());
-  g = await geo();
-  assert.ok(g.cards.length >= 2, 'real space holds at least two cards: ' + g.cards.length);
-  assert.ok(g.heroTop > 400 && g.heroTop < 700, 'hero position as in dock-grid: ' + g.heroTop);
-  const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  g.cards.forEach((c) => {
-    assert.ok(c.bottom <= g.heroTop, 'above the app name');
-    assert.equal(overlap(c, g.heroRect), false, 'no overlap with the app name');
-    assert.equal(overlap(c, g.buttons), false, 'no overlap with the header buttons');
+  const geo = async () => ({
+    grid: await page.evaluate(rect('#landingWidgets .lw-grid')),
+    stack: await page.evaluate(rect('#landingWidgets .lw-stack')),
+    cards: await page.evaluate(
+      `Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-stack .lw-card'), (c) => { const b = c.getBoundingClientRect(); return { id: c.getAttribute('data-lw'), left: b.left, right: b.right, top: b.top, bottom: b.bottom }; })`
+    ),
+    weather: await page.evaluate(rect('#homeWeather')),
+    buttons: await page.evaluate(rect('#topButtons')),
+    hero: await page.evaluate(rect('#hero')),
+    time: await page.evaluate(rect('#timeRow')),
+    heroTop: await page.evaluate(() => parseFloat(document.getElementById('hero').style.top))
   });
-  assert.equal(overlap(g.host, g.buttons), false);
-  await room(page, true);
-  await page.evaluate(() => HomeLanding.render());
+  let g = await geo();
+  assert.ok(g.grid && g.stack, 'grid and cards on the real space');
+  assert.equal(g.stack.right, 1808, 'cards right edge = header buttons right edge');
+  assert.equal(g.stack.width, 316);
+  assert.equal(g.grid.width, 330);
+  assert.ok(g.grid.right <= g.stack.left, 'grid left of the cards');
+  assert.ok(g.weather.right <= g.grid.left, 'weather left of the grid: ' + g.weather.right + ' <= ' + g.grid.left);
+  // Tops follow the weather block (clock row bottom + 26) where the columns are clear of the header buttons.
+  assert.equal(Math.round(g.weather.top), Math.round(g.time.bottom + 26));
+  assert.equal(Math.round(g.grid.top), Math.round(g.weather.top), 'grid top = weather top');
+  assert.equal(Math.round(g.stack.top), Math.round(g.weather.top), 'cards top = weather top');
+  [g.weather, g.grid, g.stack].forEach((r, i) => {
+    assert.equal(overlap(r, g.buttons), false, 'column ' + i + ' vs header buttons');
+    assert.equal(overlap(r, g.hero), false, 'column ' + i + ' vs app name');
+    assert.ok(r.bottom <= g.heroTop || i === 0, 'above the app name');
+  });
+  assert.equal(overlap(g.weather, g.grid), false);
+  assert.equal(overlap(g.grid, g.stack), false);
+  assert.equal(overlap(g.weather, g.stack), false);
+  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'], 'all three cards fit');
+  for (let i = 1; i < g.cards.length; i++) {
+    const gap = g.cards[i].top - g.cards[i - 1].bottom;
+    assert.ok(gap >= 8 && gap <= 12, 'about 10 px gap: ' + gap);
+  }
+  assert.ok(g.grid.height >= 240 && g.grid.height <= 300, 'grid about 260 px high: ' + g.grid.height);
 
+  // 9b. Columns whose top would collide with the header buttons start just below them.
   await page.evaluate(() => {
-    const hero = document.getElementById('hero');
-    hero.textContent = hero.textContent || 'Some App';
-    hero.style.top = '400px';
+    const tr = document.getElementById('timeRow');
+    window.__timeTop = tr.style.marginTop;
+    document.getElementById('homeWeather').style.top = '60px';
     HomeLanding.render();
   });
   g = await geo();
-  const kept = g.cards.length;
-  g.cards.forEach((c) => assert.ok(c.bottom <= 400, 'inside the shorter space'));
-  assert.ok(kept < 3, 'cards dropped when they do not fit: ' + kept);
-  const names = await page.evaluate(() => HomeLanding.state().cards);
-  assert.deepEqual(names, ['calendar', 'rates', 'football'].slice(0, kept), 'dropped from the end');
+  assert.ok(g.stack.top >= g.buttons.bottom + 19, 'cards start below the buttons: ' + g.stack.top + ' vs ' + g.buttons.bottom);
+  assert.ok(g.grid.top >= g.buttons.bottom + 19 || g.grid.right <= g.buttons.left, 'grid clear of the buttons');
+  assert.equal(overlap(g.stack, g.buttons), false);
+  assert.equal(overlap(g.grid, g.buttons), false);
+  await weather(page, 660);
+  await page.evaluate(() => HomeLanding.render());
+
+  // 9c. A hero that starts higher drops whole parts: cards from the end, then the grid; nothing is clipped.
+  await page.evaluate(() => {
+    document.getElementById('hero').style.top = '400px';
+    HomeLanding.render();
+  });
+  g = await geo();
+  assert.equal(g.grid, null, 'grid dropped when it does not fit');
+  assert.ok(g.cards.length >= 1 && g.cards.length < 3, 'cards dropped from the end: ' + g.cards.length);
+  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'].slice(0, g.cards.length));
+  g.cards.forEach((c) => assert.ok(c.bottom <= 400 - 19, 'inside the shorter space'));
   await page.evaluate(() => {
     document.getElementById('hero').style.top = '60px'; // nothing fits
     HomeLanding.render();
@@ -267,25 +335,59 @@ const NONE = { calendar: false, rates: false, football: false };
   assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), []);
   assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
   await page.evaluate(() => {
-    document.getElementById('hero').style.top = '';
+    document.getElementById('hero').style.top = window.__real.hero;
     HomeLanding.render();
   });
 
-  // 9. Long team names: the card keeps its width, names are cut with an ellipsis.
-  await seed(page, { long: true });
-  await toggles(page, { calendar: false, rates: false, football: true });
+  // 9d. A wide weather block (compact format, large scale) pushes the cards out first, then the grid; never overlapped.
+  await weather(page, 1250);
+  await page.evaluate(() => HomeLanding.render());
   g = await geo();
-  assert.equal(g.cards[0].width, 360);
+  assert.equal(g.stack, null, 'cards column given up for the weather block');
+  assert.ok(g.grid && g.grid.left >= g.weather.right, 'grid kept right of the weather block');
+  assert.equal(overlap(g.weather, g.grid), false);
+  await weather(page, 1600);
+  await page.evaluate(() => HomeLanding.render());
+  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), [], 'nothing left: nothing shown');
+  await weather(page, 660);
+  await page.evaluate(() => HomeLanding.render());
+
+  // 10. Long team names: the card keeps its width, names are cut with an ellipsis.
+  await seed(page, { long: true });
+  await toggles(page, { calendar: false, nameday: false, rates: false, football: true });
+  g = await geo();
+  assert.equal(g.stack.width, 316);
   const cut = await page.evaluate(() =>
     Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-name'), (n) => n.scrollWidth > n.clientWidth)
   );
   assert.equal(cut, true, 'long names are truncated, not wrapped');
-  assert.equal(
-    await page.evaluate(() => document.getElementById('landingWidgets').scrollWidth <= 360),
-    true
-  );
+  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollWidth <= 316), true);
 
-  // 10. Timers and requests (fake clock): hourly refresh at most, nothing with toggles OFF or scope off.
+  // 11. Romanian: month title, weekday names and card titles are localized.
+  await seed(page);
+  await toggles(page, ALL);
+  await page.evaluate(() => {
+    localStorage.setItem('tvhome.language', 'ro');
+    HomeI18n.refresh();
+    HomeLanding.render();
+  });
+  const ro = await page.evaluate(() => ({
+    month: document.querySelector('#landingWidgets .lw-month').textContent,
+    days: Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-weekday'), (c) => c.textContent),
+    labels: Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-label'), (c) => c.textContent)
+  }));
+  assert.match(ro.month, /^noiembrie 2026$/i);
+  assert.equal(ro.days[0], 'Lun');
+  assert.ok(ro.labels.includes('Onomastica'), ro.labels.join());
+  g = await geo();
+  assert.equal(overlap(g.grid, g.stack), false);
+  assert.equal(overlap(g.weather, g.grid), false);
+  await page.evaluate(() => {
+    localStorage.removeItem('tvhome.language');
+    HomeI18n.refresh();
+  });
+
+  // 12. Timers and requests (fake clock): hourly refresh at most, nothing with toggles OFF or scope off.
   await seed(page);
   await toggles(page, NONE);
   await page.clock.install({ time: new Date(2026, 10, 16, 23, 58, 0) });
@@ -298,10 +400,10 @@ const NONE = { calendar: false, rates: false, football: false };
   assert.equal((await state(page)).timer, false);
   await toggles(page, ALL);
   assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 1, football: 1 }, 'first refresh on activation');
-  // Midnight passed: the calendar title shows the new date (own clock) after the minute timer.
+  // Midnight passed: the grid highlights the new day after the minute timer.
   await page.evaluate(() => HomeCalendar.setClock(() => new Date()));
   await page.clock.runFor(3 * 60000);
-  assert.match(await page.locator('#landingWidgets .lw-calendar .lw-label').textContent(), /^Tuesday, 17 November/);
+  assert.equal(await page.locator('#landingWidgets .lw-today').textContent(), '17');
   await page.clock.runFor(2 * 3600000 + 5 * 60000);
   const afterTwoHours = await page.evaluate(() => window.__calls);
   assert.deepEqual(afterTwoHours, { rates: 3, football: 3 }, 'one refresh per hour, not more: ' + JSON.stringify(afterTwoHours));
