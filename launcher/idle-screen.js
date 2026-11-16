@@ -5,7 +5,8 @@
  * #idleScreen covers Home: the clock style shows a big clock, the date and the weather; the panel style a smaller
  * clock plus blocks (date with holiday / name day, rates, football). A block without data is left out.
  * ANY key or pointer input then closes it and is CONSUMED (nothing underneath is activated).
- * Never starts while Settings or the info panel is open, and everything stops when the scope is off.
+ * Never starts while Settings is open or Home is not in front (hidden document); an info panel still open at the timeout
+ * is closed and idle starts a cycle later. Everything stops when the scope is off.
  * OLED: the content moves a few pixels every minute along a fixed cycle; brightness comes from the shade opacity.
  * Only the idle screen of Home: the LG system screensaver runs outside Home and is not controlled here.
  */
@@ -155,11 +156,16 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
+  // True = do not start now. Hidden document: another app is in the foreground. Settings open: wait. Info panel open
+  // at the timeout: close it (a static page would otherwise stay on an OLED screen forever); idle starts next cycle.
   function blocked() {
-    return !!(
-      (root.RenewalPanel && root.RenewalPanel.isOpen()) ||
-      (root.InfoPanel && root.InfoPanel.isOpen())
-    );
+    if (doc.hidden) return true;
+    if (root.RenewalPanel && root.RenewalPanel.isOpen()) return true;
+    if (root.InfoPanel && root.InfoPanel.isOpen()) {
+      root.InfoPanel.close();
+      return true;
+    }
+    return false;
   }
 
   // ---- overlay content ----
@@ -375,8 +381,18 @@
       return;
     }
     // The rest of the gesture that woke us (key up / press, mouse up / click) must not reach Home either.
+    // A key held down: its repeats are consumed (each one extends the window) until the key up; another key ends it.
     if (swallow) {
-      if (now() > swallow.until || WAKE[type]) swallow = null;
+      if (now() > swallow.until) swallow = null;
+      else if (
+        type === 'keydown' &&
+        e.repeat &&
+        swallow.types.indexOf('keyup') >= 0 &&
+        code(e) === swallow.key
+      ) {
+        swallow.until = now() + SWALLOW_MS;
+        return consume(e);
+      } else if (WAKE[type]) swallow = null;
       else if (
         swallow.types.indexOf(type) >= 0 &&
         (type.indexOf('key') !== 0 || code(e) === swallow.key)
@@ -402,10 +418,20 @@
     'touchstart',
     'touchend'
   ];
+  // Another app in front (or back in Home): nothing may run while hidden; coming back counts as activity.
+  function onVisibility() {
+    if (!controller) return;
+    controller.activity();
+    if (doc.hidden) hide();
+  }
   var listening = false;
   function listen(on) {
     if (on === listening) return;
     listening = on;
+    doc[on ? 'addEventListener' : 'removeEventListener'](
+      'visibilitychange',
+      onVisibility
+    );
     EVENTS.forEach(function (type) {
       root[on ? 'addEventListener' : 'removeEventListener'](
         type,

@@ -357,6 +357,129 @@ const assert = require('node:assert/strict'),
   assert.equal((await cfg()).blocks.date, true, 'other blocks kept');
   await page.evaluate(() => document.getElementById('renewalClose').click());
 
+  // 15. I1: while the document is hidden (another app in the foreground) the idle screen never shows and nothing is requested;
+  // becoming visible again counts as activity (timer restarts, no stuck overlay).
+  await setup({
+    timeoutMin: 5,
+    style: 'panel',
+    blocks: { date: true, rates: true, football: true }
+  });
+  const setHidden = (hidden) =>
+    page.evaluate((h) => {
+      window.__hiddenFlag = h;
+      if (!window.__hiddenPatched) {
+        window.__hiddenPatched = true;
+        Object.defineProperty(document, 'hidden', {
+          configurable: true,
+          get: () => window.__hiddenFlag
+        });
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  await setHidden(true);
+  await page.clock.runFor(40 * MIN);
+  assert.equal(await shown(), false, 'hidden document: no idle screen');
+  assert.equal(
+    await page.evaluate(() => window.__refresh),
+    0,
+    'hidden document: no refresh requests'
+  );
+  await setHidden(false);
+  assert.equal(await shown(), false, 'visible again: not shown at once');
+  await page.clock.runFor(4 * MIN);
+  assert.equal(await shown(), false, 'timer restarted when visible again');
+  await page.clock.runFor(1 * MIN + 1000);
+  assert.equal(await shown(), true, 'shown after a full timeout while visible');
+  // Hidden while the overlay is up: it closes and the tick stops; visible again does not leave it stuck.
+  await page.evaluate(() => (window.__refresh = 0));
+  await setHidden(true);
+  assert.equal(await shown(), false, 'overlay closed when the document hides');
+  assert.equal(
+    await page.evaluate(() => document.body.classList.contains('idle-active')),
+    false
+  );
+  await page.clock.runFor(40 * MIN);
+  assert.equal(await page.evaluate(() => window.__refresh), 0, 'no ticks');
+  await setHidden(false);
+  assert.equal(await shown(), false, 'no stuck overlay');
+  await page.keyboard.press('ArrowLeft');
+
+  // 16. I3: a key held down after waking: repeats and the key up are consumed too; a tap behaves as before.
+  await setup({ timeoutMin: 5, style: 'clock' });
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await page.evaluate(() => (window.__keys = []));
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('Enter');
+  await page.keyboard.up('Enter');
+  assert.equal(await shown(), false, 'held key closes it');
+  assert.deepEqual(
+    await page.evaluate(() => window.__keys),
+    [],
+    'repeats and key up of the waking key never reach Home'
+  );
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(
+    (await page.evaluate(() => window.__keys)).filter((k) =>
+      /^keydown/.test(k)
+    ),
+    ['keydown:ArrowRight'],
+    'the next key works normally'
+  );
+  // Another key right after waking cancels the swallow.
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await page.evaluate(() => (window.__keys = []));
+  await page.keyboard.down('Enter');
+  await page.keyboard.down('ArrowDown');
+  assert.deepEqual(
+    (await page.evaluate(() => window.__keys)).filter((k) =>
+      /^keydown/.test(k)
+    ),
+    ['keydown:ArrowDown'],
+    'another key is not swallowed'
+  );
+  await page.keyboard.up('ArrowDown');
+  await page.keyboard.up('Enter');
+  await page.keyboard.press('ArrowLeft');
+
+  // 17. M7: an info panel left open past the timeout is closed (OLED protection); Settings stays and blocks.
+  await setup({ timeoutMin: 5, style: 'clock' });
+  await page.evaluate(() => InfoPanel.open());
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(
+    await page.evaluate(() => InfoPanel.isOpen()),
+    false,
+    'info panel closed at the timeout'
+  );
+  assert.equal(await shown(), false, 'idle starts on the next cycle');
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true, 'shown on the next cycle');
+  await page.keyboard.press('ArrowLeft');
+  await page.evaluate(() => RenewalPanel.open());
+  await page.clock.runFor(12 * MIN);
+  assert.equal(
+    await page.evaluate(() => RenewalPanel.isOpen()),
+    true,
+    'Settings is not closed'
+  );
+  assert.equal(await shown(), false, 'not while Settings is open');
+  await page.evaluate(() => document.getElementById('renewalClose').click());
+
+  // 18. M11: a corrupt stored value falls back to the defaults through get().
+  const fromBad = await page.evaluate(() => {
+    localStorage.setItem(
+      'tvhome.idle.v1',
+      '{"timeoutMin":"abc","dim":400,"style":"x","blocks":7}'
+    );
+    return HomeInfo.idle.get();
+  });
+  assert.equal(fromBad.timeoutMin, 10);
+  assert.equal(fromBad.dim, 100);
+  assert.equal(fromBad.style, 'clock');
+  assert.equal(fromBad.blocks.date, true);
+
   assert.deepEqual(home.errors, [], 'no page errors');
   await home.close();
   console.log('PASS idle-ui');
