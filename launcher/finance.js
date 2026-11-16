@@ -163,6 +163,21 @@
     return out;
   }
 
+  // Main-page card (landing-widgets.js): the chosen currencies (at most 4) and the BNR publication date, from the
+  // stored data only. null without data.
+  function landingCard() {
+    var s = store && store.get(),
+      lines = idleLines().slice(0, 4),
+      m;
+    if (!s || !s.current || !lines.length) return null;
+    m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s.current.date);
+    return {
+      title: t('Exchange rates'),
+      meta: m ? m[2] + '.' + m[1] : '',
+      lines: lines
+    };
+  }
+
   // ---- service transport ----
   // Resolves with the XML string. Rejects with Error('service') when bnrRates is unavailable, any other
   // Error otherwise (network, timeout, bad reply).
@@ -504,6 +519,7 @@
     ingest: ingest,
     trend: trend,
     idleLines: idleLines,
+    landingCard: landingCard,
     refresh: refresh
   };
   if (info && store) {

@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="finance.css" />
     <link rel="stylesheet" href="football.css" />
     <link rel="stylesheet" href="idle-screen.css" />
+    <link rel="stylesheet" href="landing-widgets.css" />
   </head>
   <body>
     <div id="homeSurface" class="ctv-home ctv-starting">
@@ -113,6 +114,9 @@
         <div class="info-body"></div>
         <div class="info-empty" hidden></div>
       </div>
+
+      <!-- mr.redify only: widget cards on the right, filled by landing-widgets.js (not focusable). -->
+      <div id="landingWidgets" hidden></div>
     </div>
 
     <!-- mr.redify only: idle screen overlay, filled by idle-screen.js. -->
@@ -167,6 +171,7 @@
     <script src="football-sportsdb.js"></script>
     <script src="football.js"></script>
     <script src="idle-screen.js"></script>
+    <script src="landing-widgets.js"></script>
     <script src="settings-categories.js"></script>
     <script src="renewal-panel.js"></script>
     <script src="helper-control.js"></script>

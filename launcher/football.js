@@ -467,6 +467,51 @@
     return out;
   }
 
+  // Main-page card (landing-widgets.js), stored data only, no request. For every followed team the live match, else
+  // the next one, else the last result; shared matches once; live first, then next by start, then last (newest first);
+  // at most 3 items { kind: 'live'|'next'|'last', match, text } where text is the second line (score, kick-off, result).
+  function landingItems() {
+    var picked = [],
+      seen = {},
+      snap = readSnap();
+    if (!store) return picked;
+    statuses(snap, clock().toISOString()).forEach(function (x) {
+      var kind = x.status.live
+          ? 'live'
+          : x.status.next
+            ? 'next'
+            : x.status.last
+              ? 'last'
+              : '',
+        m = kind && x.status[kind];
+      if (!m || seen[m.id]) return;
+      seen[m.id] = true;
+      picked.push({ kind: kind, match: m });
+    });
+    var rank = { live: 0, next: 1, last: 2 };
+    picked.sort(function (a, b) {
+      if (rank[a.kind] !== rank[b.kind]) return rank[a.kind] - rank[b.kind];
+      var d = ms(a.match.start) - ms(b.match.start);
+      return a.kind === 'last' ? -d : d;
+    });
+    return picked.slice(0, 3).map(function (p) {
+      var m = p.match,
+        score = (m.home.score === null ? '?' : m.home.score) +
+          ' - ' +
+          (m.away.score === null ? '?' : m.away.score);
+      return {
+        kind: p.kind,
+        match: m,
+        text:
+          p.kind === 'live'
+            ? t('Live') + (m.clock ? ' ' + clockText(m.clock) : '') + ' · ' + score
+            : p.kind === 'next'
+              ? dayOf(m.start) + ' ' + timeOf(m.start)
+              : t('FT') + ' ' + score + ' · ' + dayOf(m.start)
+      };
+    });
+  }
+
   // ---- page ----
   function el(tag, cls, text) {
     var e = doc.createElement(tag);
@@ -827,6 +872,7 @@
     teamStatus: teamStatus,
     refresh: refresh,
     idleLines: idleLines,
+    landingItems: landingItems,
     clockText: clockText,
     setClock: function (fn) {
       clock = fn;

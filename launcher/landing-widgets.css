@@ -1,0 +1,117 @@
+/* Main-page widget cards (landing-widgets.js), mr.redify only. Glass look in the theme's colours. */
+#landingWidgets {
+  position: absolute;
+  right: 112px;
+  width: 360px;
+  z-index: 3;
+  pointer-events: none;
+}
+#landingWidgets[hidden] {
+  display: none;
+}
+body.scrolled #landingWidgets,
+body.editing #landingWidgets,
+body.weather-scrolled #landingWidgets,
+body.idle-active #landingWidgets,
+#infoPanel:not([hidden]) ~ #landingWidgets {
+  visibility: hidden;
+}
+#landingWidgets .lw-card {
+  box-sizing: border-box;
+  margin-top: 14px;
+  padding: 10px 18px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 28px;
+  background-color: rgba(255, 255, 255, 0.12);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+#landingWidgets .lw-card:first-child {
+  margin-top: 0;
+}
+#landingWidgets .lw-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+#landingWidgets .lw-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  fill: currentColor;
+}
+#landingWidgets .lw-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#landingWidgets .lw-meta {
+  flex-shrink: 0;
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: 400;
+}
+#landingWidgets .lw-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  line-height: 26px;
+}
+#landingWidgets .lw-calendar .lw-line:first-of-type {
+  color: #fff;
+}
+#landingWidgets .lw-match {
+  margin-top: 4px;
+}
+#landingWidgets .lw-teams {
+  display: flex;
+  align-items: center;
+  font-size: 20px;
+  line-height: 28px;
+}
+#landingWidgets .lw-team {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+}
+#landingWidgets .lw-team img {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  object-fit: contain;
+}
+#landingWidgets .lw-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#landingWidgets .lw-dash {
+  flex-shrink: 0;
+  margin: 0 8px;
+  opacity: 0.6;
+}
+#landingWidgets .lw-sub {
+  font-size: 16px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, 0.72);
+}
+#landingWidgets .lw-live .lw-sub {
+  color: #ff8a80;
+}

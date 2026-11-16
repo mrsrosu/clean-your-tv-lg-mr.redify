@@ -643,7 +643,60 @@
     refreshList(false);
   }
 
+  // Main-page card (landing-widgets.js): today's date, holiday, name days and the own event of today or the next one
+  // within 7 days. At most 3 lines; null when the device date is unavailable. Reads stored data only, no request.
+  function landingCard() {
+    var today = readToday();
+    if (!today || !calendar) return null;
+    var settings = safe(calendar.get, { events: [] }),
+      marks = safe(daily.get, { showHolidays: true, showNameDays: true }),
+      lines = [],
+      holidays = safe(function () {
+        return marks.showHolidays
+          ? root.HomeRoCalendar.holidayNames(today.year, today.month, today.day)
+          : [];
+      }, []),
+      names = safe(function () {
+        return marks.showNameDays
+          ? root.HomeRoCalendar.nameDays(today.year, today.month, today.day)
+          : [];
+      }, []),
+      own = eventsOn(settings.events, today.year, today.month, today.day),
+      i,
+      day;
+    if (holidays.length) lines.push(holidays.join(', '));
+    if (names.length) lines.push(t('Name day') + ': ' + names.join(', '));
+    if (own.length) lines.push(t('Your event') + ': ' + own[0].title);
+    else
+      for (i = 1; i <= 7; i++) {
+        day = shift(today, i);
+        own = eventsOn(settings.events, day.year, day.month, day.day);
+        if (own.length) {
+          lines.push(
+            t('Next') +
+              ': ' +
+              own[0].title +
+              ' · ' +
+              two(day.day) +
+              '.' +
+              two(day.month)
+          );
+          break;
+        }
+      }
+    return {
+      title:
+        weekdayName(weekdayOf(today.year, today.month, today.day), false) +
+        ', ' +
+        today.day +
+        ' ' +
+        monthName(today.month),
+      lines: lines.slice(0, 3)
+    };
+  }
+
   root.HomeCalendar = {
+    landingCard: landingCard,
     monthGrid: monthGrid,
     isoWeek: isoWeek,
     sanitizeEvents: sanitizeEvents,
