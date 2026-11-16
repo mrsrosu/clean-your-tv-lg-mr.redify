@@ -23,8 +23,11 @@
   function copy(a, b) {
     const out = {};
     let key;
-    for (key in a) if (Object.prototype.hasOwnProperty.call(a, key)) out[key] = a[key];
-    if (b) for (key in b) if (Object.prototype.hasOwnProperty.call(b, key)) out[key] = b[key];
+    for (key in a)
+      if (Object.prototype.hasOwnProperty.call(a, key)) out[key] = a[key];
+    if (b)
+      for (key in b)
+        if (Object.prototype.hasOwnProperty.call(b, key)) out[key] = b[key];
     return out;
   }
   // sanitize(raw) returns only the valid fields; rejected ones keep the previous value.
@@ -32,7 +35,8 @@
     function load() {
       try {
         const raw = JSON.parse(root.localStorage.getItem(key));
-        if (raw && typeof raw === 'object') return copy(defaults, sanitize(raw));
+        if (raw && typeof raw === 'object')
+          return copy(defaults, sanitize(raw));
       } catch (_) {}
       return copy(defaults);
     }
@@ -52,6 +56,22 @@
       }
     };
   }
+  // Settings tabs shown only while mr.redify is active; feature modules register theirs.
+  const tabSpecs = [];
+  function registerTab(spec) {
+    if (!spec || !spec.id || typeof spec.build !== 'function') return;
+    for (let i = 0; i < tabSpecs.length; i++)
+      if (tabSpecs[i].id === spec.id) {
+        tabSpecs[i] = spec;
+        return;
+      }
+    tabSpecs.push(spec);
+  }
+  function tabs() {
+    return tabSpecs.slice();
+  }
+  info.registerTab = registerTab;
+  info.tabs = tabs;
   info.isMrRedify = isMrRedify;
   info.onScopeChange = onScopeChange;
   info.createStore = createStore;
