@@ -1,6 +1,7 @@
 /* Home info: idle screen (mr.redify only) and its "Idle screen" Settings tab.
  *
- * Store HomeInfo.idle (tvhome.idle.v1): style 'clock' | 'panel', timeoutMin 0 (off) | 5 | 10 | 30, dim 0-100,
+ * Store HomeInfo.idle (tvhome.idle.v1): enabled (the ON/OFF switch; false = never starts), style 'clock' | 'panel',
+ * timeoutMin 0 (off, as before) | 5 | 10 | 30, dim 0-100,
  * seconds, blocks {date, rates, football}. After the timeout without a key, pointer move/click or wheel the overlay
  * #idleScreen covers Home: the clock style shows a big clock, the date and the weather; the panel style a smaller
  * clock plus blocks (date with holiday / name day, rates, football). A block without data is left out.
@@ -15,6 +16,7 @@
   var STYLES = ['clock', 'panel'],
     TIMEOUTS = [0, 5, 10, 30],
     DEFAULTS = {
+      enabled: true,
       style: 'clock',
       timeoutMin: 10,
       dim: 60,
@@ -41,6 +43,9 @@
   function sanitize(raw) {
     var out = {};
     if (!raw || typeof raw !== 'object') return out;
+    if ('enabled' in raw)
+      out.enabled =
+        typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULTS.enabled;
     if ('style' in raw)
       out.style = STYLES.indexOf(raw.style) >= 0 ? raw.style : DEFAULTS.style;
     if ('timeoutMin' in raw)
@@ -451,8 +456,9 @@
   function reload() {
     stop();
     if (!info.isMrRedify()) return;
-    var minutes = store.get().timeoutMin;
-    if (!(minutes > 0)) return;
+    var cfg = store.get(),
+      minutes = cfg.timeoutMin;
+    if (!cfg.enabled || !(minutes > 0)) return;
     controller = createIdleController({
       timeoutMs: minutes * 60000,
       onIdle: show,
@@ -533,6 +539,22 @@
       parent.appendChild(row);
     }
     var s1 = section(t('Idle screen'));
+    // First control: the ON/OFF switch. ON = the saved timeout (a saved "0 minutes" from before counts as OFF).
+    toggle(
+      s1,
+      t('Idle screen'),
+      'idle-enabled',
+      function () {
+        var c = store.get();
+        return c.enabled && c.timeoutMin > 0;
+      },
+      function (v) {
+        var patch = { enabled: v };
+        if (v && !(store.get().timeoutMin > 0))
+          patch.timeoutMin = DEFAULTS.timeoutMin;
+        store.set(patch);
+      }
+    );
     choice(
       s1,
       t('Style'),
@@ -545,12 +567,10 @@
     choice(
       s1,
       t('Start after (minutes)'),
-      TIMEOUTS.map(function (m) {
-        return {
-          cls: 'timeout-' + m,
-          text: m ? String(m) : t('Off'),
-          value: m
-        };
+      TIMEOUTS.filter(function (m) {
+        return m > 0;
+      }).map(function (m) {
+        return { cls: 'timeout-' + m, text: String(m), value: m };
       }),
       'timeoutMin'
     );

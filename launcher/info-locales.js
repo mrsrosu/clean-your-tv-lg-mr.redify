@@ -3,6 +3,8 @@ HomeI18n.add({
   'en': {},
   'ro': {
     'Idle screen': 'Ecran de repaus',
+    'Show on main page': 'Arată pe pagina principală',
+    'Rates': 'Cursuri',
     'Style': 'Stil',
     'Clock': 'Ceas',
     'Panel': 'Panou',

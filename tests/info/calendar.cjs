@@ -80,7 +80,8 @@ test('calendar store defaults', () => {
   assert.deepEqual(c.get(), {
     weekStart: 'mon',
     weekNumbers: false,
-    events: []
+    events: [],
+    landing: false
   });
   assert.deepEqual(
     c.set({ weekStart: 'sun', weekNumbers: true }).weekStart,
@@ -138,13 +139,15 @@ test('sanitize: events not an array -> [] (also from corrupt storage)', () => {
   assert.deepEqual(context(mem).HomeInfo.calendar.get(), {
     weekStart: 'sun',
     weekNumbers: false,
-    events: []
+    events: [],
+    landing: false
   });
   const junk = memory({ 'tvhome.calendar.v1': '{broken' });
   assert.deepEqual(context(junk).HomeInfo.calendar.get(), {
     weekStart: 'mon',
     weekNumbers: false,
-    events: []
+    events: [],
+    landing: false
   });
 });
 test('isoWeek', () => {

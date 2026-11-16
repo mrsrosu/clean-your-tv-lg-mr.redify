@@ -197,6 +197,10 @@ const assert = require('node:assert/strict'),
   assert.equal(await page.evaluate(() => HomeIdle.isRunning()), false);
   await page.clock.runFor(60 * MIN);
   assert.equal(await shown(), false);
+  await setup({ timeoutMin: 5, enabled: false });
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), false, 'enabled:false never starts');
+  await page.clock.runFor(60 * MIN);
+  assert.equal(await shown(), false);
 
   // 9. Seconds on: the clock shows seconds and moves every second.
   await setup({ timeoutMin: 5, seconds: true });
@@ -343,8 +347,35 @@ const assert = require('node:assert/strict'),
   assert.equal((await cfg()).style, 'panel');
   await pane.locator('.idle-timeout-30').click();
   assert.equal((await cfg()).timeoutMin, 30);
-  await pane.locator('.idle-timeout-0').click();
-  assert.equal((await cfg()).timeoutMin, 0);
+  // The ON/OFF switch is the first control of the tab and replaces the old "Off" timeout choice.
+  assert.equal(
+    await pane.evaluate(
+      (p) => p.querySelector('button, input, select').className,
+      null
+    ),
+    await pane.locator('.idle-enabled').getAttribute('class'),
+    'switch first'
+  );
+  assert.equal(await pane.locator('.idle-timeout-0').count(), 0, 'no Off choice');
+  assert.equal(await pane.locator('.idle-enabled').innerText(), 'On');
+  assert.equal(await pane.locator('.idle-enabled').getAttribute('aria-pressed'), 'true');
+  await pane.locator('.idle-enabled').click();
+  assert.equal((await cfg()).enabled, false);
+  assert.equal((await cfg()).timeoutMin, 30, 'timeout kept while OFF');
+  assert.equal(await pane.locator('.idle-enabled').innerText(), 'Off');
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), false, 'OFF stops the timer');
+  await pane.locator('.idle-enabled').click();
+  assert.equal((await cfg()).enabled, true);
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), true, 'ON starts it again');
+  // A saved "0 minutes" from before reads as OFF; switching ON restores the default timeout.
+  await page.evaluate(() => HomeInfo.idle.set({ timeoutMin: 0 }));
+  await page.evaluate(() => HomeIdle.reload());
+  await pane.locator('.idle-style-clock').click(); // re-sync the buttons
+  assert.equal(await pane.locator('.idle-enabled').innerText(), 'Off');
+  await pane.locator('.idle-enabled').click();
+  assert.equal((await cfg()).timeoutMin, 10);
+  assert.equal((await cfg()).enabled, true);
+  await pane.locator('.idle-timeout-30').click();
   await pane.locator('.idle-dim-up').click();
   assert.equal((await cfg()).dim, 70);
   await pane.locator('.idle-dim-down').click();

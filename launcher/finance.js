@@ -91,12 +91,18 @@
   if (info && info.createStore) {
     store = info.createStore(
       'tvhome.finance.v1',
-      { currencies: DEFAULTS.slice(), current: null, previous: null },
+      {
+        currencies: DEFAULTS.slice(),
+        current: null,
+        previous: null,
+        landing: false
+      },
       function (raw) {
         var out = {},
           list;
         if ('currencies' in raw && (list = sanitizeCurrencies(raw.currencies)))
           out.currencies = list;
+        if ('landing' in raw) out.landing = raw.landing === true;
         ['current', 'previous'].forEach(function (key) {
           if (!(key in raw)) return;
           if (raw[key] === null) out[key] = null;
@@ -393,6 +399,23 @@
       parent.appendChild(row);
       sync();
     }
+    // First control: show the rates card on the main page.
+    var sl = section(t('Show on main page')),
+      rowL = el('div', 'fin-field'),
+      landing = button('fin-toggle fin-toggle-landing');
+    function syncLanding() {
+      var on = store.get().landing === true;
+      landing.textContent = on ? t('On') : t('Off');
+      pressed(landing, on);
+    }
+    landing.onclick = function () {
+      store.set({ landing: !store.get().landing });
+      syncLanding();
+    };
+    rowL.appendChild(el('span', 'fin-field-label', t('Rates')));
+    rowL.appendChild(landing);
+    sl.appendChild(rowL);
+    syncLanding();
     if (daily) {
       var s1 = section(t('Calendar marks'));
       toggleRow(s1, t('Holidays'), 'showHolidays');

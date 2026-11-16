@@ -230,7 +230,7 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
   assert.equal(await pane.isVisible(), true);
   assert.equal(
     await pane.locator('.fin-toggle').count(),
-    2,
+    3, // landing + holidays + name days
     'real tab, not placeholder'
   );
   assert.equal(
@@ -328,7 +328,8 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
   assert.deepEqual(await page.evaluate(() => HomeInfo.finance.get()), {
     currencies: ['EUR', 'USD', 'GBP', 'CHF'],
     current: null,
-    previous: null
+    previous: null,
+    landing: false
   });
 
   assert.deepEqual(home.errors, [], 'no page errors');

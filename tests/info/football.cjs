@@ -294,7 +294,7 @@ test('teamStatus: next, last and live by state and start', () => {
 test('store: defaults, 6 teams -> 5, unknown competition dropped, malformed dropped', () => {
   const mem = memory(),
     I = context(mem, {}).HomeInfo;
-  assert.deepEqual(I.football.get(), { competitions: [], teams: [] });
+  assert.deepEqual(I.football.get(), { competitions: [], teams: [], landing: false });
   I.football.set({ competitions: ['eng.1', 'nope.9', 'eng.1', 7, 'rou.1'] });
   assert.deepEqual(I.football.get().competitions, ['eng.1', 'rou.1']);
   const t = (i) => ({ competition: 'eng.1', id: String(i), name: 'T' + i });
@@ -320,7 +320,7 @@ test('store: defaults, 6 teams -> 5, unknown competition dropped, malformed drop
   assert.deepEqual(I.football.get().teams, []);
   assert.ok(mem.data['tvhome.football.v1']);
   mem.data['tvhome.football.v1'] = '{"competitions":["xx"],"teams":{"a":1}}';
-  assert.deepEqual(I.football.get(), { competitions: [], teams: [] });
+  assert.deepEqual(I.football.get(), { competitions: [], teams: [], landing: false });
 });
 const NOW = '2026-11-16T12:00:00Z';
 function followArsenal(ctx) {

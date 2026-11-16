@@ -114,6 +114,27 @@ test('throwing localStorage does not throw and get() returns defaults', () => {
   const none = context(undefined).HomeInfo.createStore('k', defaults, sanitize);
   assert.deepEqual(none.get(), defaults);
 });
+test('onChange(key, cb) fires after set/reset of that store only; errors are swallowed', () => {
+  const info = context(memory()).HomeInfo,
+    a = info.createStore('a', defaults, sanitize),
+    b = info.createStore('b', defaults, sanitize),
+    seen = [];
+  assert.equal(typeof info.onChange, 'function');
+  info.onChange('a', () => seen.push('a1'));
+  info.onChange('a', () => {
+    throw new Error('boom');
+  });
+  info.onChange('a', () => seen.push('a2'));
+  info.onChange('b', () => seen.push('b'));
+  a.set({ timeoutMin: 10 });
+  assert.deepEqual(seen, ['a1', 'a2']);
+  b.reset();
+  a.reset();
+  assert.deepEqual(seen, ['a1', 'a2', 'b', 'a1', 'a2']);
+  a.get();
+  assert.equal(seen.length, 5, 'get() does not notify');
+  assert.doesNotThrow(() => info.onChange('a', 'not a function'));
+});
 test('onScopeChange callback receives true then false when the ctv-scope event fires after the surface class changes', () => {
   const ctx = context(memory()),
     seen = [];

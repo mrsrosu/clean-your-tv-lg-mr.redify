@@ -32,6 +32,19 @@
         if (Object.prototype.hasOwnProperty.call(b, key)) out[key] = b[key];
     return out;
   }
+  // Change notifications per store key (set/reset in this page): onChange(key, cb) -> cb(). Callback errors are swallowed.
+  const changeListeners = {};
+  function onChange(key, cb) {
+    if (typeof cb !== 'function') return;
+    (changeListeners[key] = changeListeners[key] || []).push(cb);
+  }
+  function notify(key) {
+    (changeListeners[key] || []).slice().forEach(function (cb) {
+      try {
+        cb();
+      } catch (_) {}
+    });
+  }
   // sanitize(raw) returns only the valid fields; rejected ones keep the previous value.
   function createStore(key, defaults, sanitize) {
     function load() {
@@ -51,10 +64,14 @@
     return {
       get: load,
       set: function (patch) {
-        return save(copy(load(), sanitize(patch || {})));
+        const value = save(copy(load(), sanitize(patch || {})));
+        notify(key);
+        return value;
       },
       reset: function () {
-        return save(copy(defaults));
+        const value = save(copy(defaults));
+        notify(key);
+        return value;
       }
     };
   }
@@ -89,4 +106,5 @@
   info.isMrRedify = isMrRedify;
   info.onScopeChange = onScopeChange;
   info.createStore = createStore;
+  info.onChange = onChange;
 })(window);

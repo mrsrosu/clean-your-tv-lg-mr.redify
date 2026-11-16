@@ -131,12 +131,23 @@ test('start twice does not double the timers', () => {
 });
 test('sanitize: defaults', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(DEFAULTS)), {
+    enabled: true,
     style: 'clock',
     timeoutMin: 10,
     dim: 60,
     seconds: false,
     blocks: { date: true, rates: false, football: false }
   });
+});
+test('sanitize: enabled is boolean-only (default true), absent when not given', () => {
+  assert.equal(DEFAULTS.enabled, true);
+  assert.equal(sanitize({}).enabled, undefined);
+  assert.equal(sanitize({ enabled: false }).enabled, false);
+  assert.equal(sanitize({ enabled: true }).enabled, true);
+  ['no', 0, null, 'false', {}].forEach((v) =>
+    assert.equal(sanitize({ enabled: v }).enabled, true)
+  );
+  assert.equal(sanitize({ timeoutMin: 0 }).timeoutMin, 0, 'timeoutMin 0 keeps its old meaning');
 });
 test('sanitize: invalid timeoutMin -> 10, valid kept', () => {
   assert.equal(sanitize({ timeoutMin: 'abc' }).timeoutMin, 10);

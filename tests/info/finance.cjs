@@ -90,7 +90,8 @@ test('store defaults and currency sanitize', () => {
   assert.deepEqual(I.finance.get(), {
     currencies: ['EUR', 'USD', 'GBP', 'CHF'],
     current: null,
-    previous: null
+    previous: null,
+    landing: false
   });
   I.finance.set({ currencies: ['EUR', 'eur', 'USD', 'ab', 'ABCD', 7, 'GBP'] });
   assert.deepEqual(I.finance.get().currencies, ['EUR', 'USD', 'GBP']);

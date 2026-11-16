@@ -199,13 +199,14 @@
     );
     calendar = info.createStore(
       'tvhome.calendar.v1',
-      { weekStart: 'mon', weekNumbers: false, events: [] },
+      { weekStart: 'mon', weekNumbers: false, events: [], landing: false },
       function (raw) {
         var out = {};
         if (raw.weekStart === 'mon' || raw.weekStart === 'sun')
           out.weekStart = raw.weekStart;
         if (typeof raw.weekNumbers === 'boolean')
           out.weekNumbers = raw.weekNumbers;
+        if ('landing' in raw) out.landing = raw.landing === true;
         if ('events' in raw) out.events = sanitizeEvents(raw.events);
         return out;
       }
@@ -467,6 +468,8 @@
       var s = calendar.get();
       toggle(mon, s.weekStart === 'mon');
       toggle(sun, s.weekStart === 'sun');
+      landing.textContent = s.landing ? t('On') : t('Off');
+      toggle(landing, s.landing);
       weeknum.textContent = s.weekNumbers ? t('On') : t('Off');
       toggle(weeknum, s.weekNumbers);
     }
@@ -517,6 +520,14 @@
         (targets[0] || add).focus();
       }
     }
+    // First control: show today's card on the main page.
+    var s0 = section(t('Show on main page')),
+      landing = button('cal-landing');
+    landing.onclick = function () {
+      calendar.set({ landing: !calendar.get().landing });
+      refreshSettings();
+    };
+    s0.appendChild(landing);
     // Week start and numbers.
     var s1 = section(t('First day of week'));
     mon.onclick = function () {

@@ -366,7 +366,8 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
   );
   assert.deepEqual(await page.evaluate(() => HomeInfo.football.get()), {
     competitions: [],
-    teams: []
+    teams: [],
+    landing: false
   });
 
   await page.evaluate(() => document.getElementById('renewalClose').click());

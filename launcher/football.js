@@ -111,7 +111,7 @@
   if (info && info.createStore && espn) {
     store = info.createStore(
       'tvhome.football.v1',
-      { competitions: [], teams: [] },
+      { competitions: [], teams: [], landing: false },
       function (raw) {
         var out = {},
           list;
@@ -122,6 +122,7 @@
           out.competitions = list;
         else if ('competitions' in raw && Array.isArray(raw.competitions))
           out.competitions = [];
+        if ('landing' in raw) out.landing = raw.landing === true;
         if ('teams' in raw && (list = sanitizeTeams(raw.teams)))
           out.teams = list;
         return out;
@@ -710,6 +711,17 @@
         return b;
       }
       pane.innerHTML = '';
+      var lp = section(t('Show on main page')),
+        lb = mark(
+          button('fb-chip fb-landing', s.landing ? t('On') : t('Off')),
+          'landing'
+        );
+      pressed(lb, s.landing);
+      lb.onclick = function () {
+        store.set({ landing: !store.get().landing });
+        draw('landing');
+      };
+      lp.appendChild(lb);
       var comps = section(t('Competitions')),
         chips = el('div', 'fb-chips');
       espn.competitions.forEach(function (c) {
