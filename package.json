@@ -16,7 +16,7 @@
     "format:staged": "lint-staged --config .lintstagedrc.json",
     "test:weather": "node tests/weather/transport.cjs && node tests/weather/service.cjs && node tests/weather/service-runtime.cjs && node tests/weather/contract.cjs && node tests/weather/data.cjs && node tests/weather/providers.cjs && node tests/weather/layout.cjs",
     "test:info": "node tests/info/ro-locale.cjs && node tests/info/store.cjs && node tests/info/fetch.cjs && node tests/info/ro-calendar.cjs && node tests/info/calendar.cjs && node tests/info/bnr-service.cjs && node tests/info/finance.cjs && node tests/info/football.cjs && node tests/info/idle.cjs",
-    "test:info:browser": "node tests/info/tabs-ui.cjs && node tests/info/panel-ui.cjs && node tests/info/icon-ui.cjs && node tests/info/landing-toggles-ui.cjs && node tests/info/landing-ui.cjs && node tests/info/logos-ui.cjs && node tests/info/national-ui.cjs && node tests/info/calendar-ui.cjs && node tests/info/finance-ui.cjs && node tests/info/football-ui.cjs && node tests/info/idle-ui.cjs",
+    "test:info:browser": "node tests/info/tabs-ui.cjs && node tests/info/panel-ui.cjs && node tests/info/icon-ui.cjs && node tests/info/landing-toggles-ui.cjs && node tests/info/landing-ui.cjs && node tests/info/logos-ui.cjs && node tests/info/national-ui.cjs && node tests/info/calendar-ui.cjs && node tests/info/finance-ui.cjs && node tests/info/football-ui.cjs && node tests/info/idle-ui.cjs && node tests/info/weather-location-ui.cjs",
     "test:weather:browser": "node tests/weather/ui.cjs && node tests/weather/matrix.cjs"
   },
   "browserslist": [

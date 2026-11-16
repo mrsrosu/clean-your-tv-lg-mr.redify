@@ -514,6 +514,24 @@ const assert = require('node:assert/strict'),
   assert.equal(fromBad.style, 'clock');
   assert.equal(fromBad.blocks.date, true);
 
+  // 20. The weather location follows the weather text on the same line, " · "-separated; nothing extra when empty;
+  // a long name is cut with an ellipsis (about 28 characters).
+  const wline = () => page.locator('#idleScreen .idle-weather').innerText();
+  await setup({ timeoutMin: 5, style: 'clock' }, { weather: { temp: 12, unit: '°C', label: 'Clear', icon: 'clear-day', location: 'Bucharest' } });
+  await page.clock.runFor(5 * MIN + 2000);
+  assert.equal(await wline(), '12°C Clear · Bucharest');
+  await page.keyboard.press('ArrowLeft');
+  await setup({ timeoutMin: 5, style: 'clock' }, { weather: { temp: 12, unit: '°C', label: 'Clear', icon: 'clear-day', location: '' } });
+  await page.clock.runFor(5 * MIN + 2000);
+  assert.equal(await wline(), '12°C Clear', 'empty location: nothing extra');
+  await page.keyboard.press('ArrowLeft');
+  await setup({ timeoutMin: 5, style: 'clock' }, { weather: { temp: 12, unit: '°C', label: 'Clear', icon: 'clear-day', location: 'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch' } });
+  await page.clock.runFor(5 * MIN + 2000);
+  const longLine = await wline();
+  assert.match(longLine, /^12°C Clear · Llanfairpwllgwyngyllgogeryc…$/, longLine);
+  assert.ok(longLine.split(' · ')[1].length <= 28);
+  await page.keyboard.press('ArrowLeft');
+
   // 19. Nothing of Home shows through the idle screen, whatever the style and the dim level: the app name (its inline
   // opacity used to beat the stylesheet), header buttons, tiles, dock band, landing widgets and the weather block.
   await page.addStyleTag({ content: '*{transition:none !important}' }); // read settled values

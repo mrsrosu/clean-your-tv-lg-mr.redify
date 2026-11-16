@@ -205,7 +205,12 @@
       s = null;
     }
     if (!s || typeof s.temp !== 'number' || !isFinite(s.temp)) return '';
-    return Math.round(s.temp) + (s.unit || '') + (s.label ? ' ' + s.label : '');
+    var text =
+        Math.round(s.temp) + (s.unit || '') + (s.label ? ' ' + s.label : ''),
+      place = typeof s.location === 'string' ? s.location.trim() : '';
+    // The place follows on the same line (cut at 28 characters); nothing extra when it is unknown.
+    if (place.length > 28) place = place.slice(0, 27) + '…';
+    return place ? text + ' · ' + place : text;
   }
   function lines(fn) {
     try {

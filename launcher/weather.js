@@ -1056,8 +1056,11 @@
       const w = store.state().data;
       if (!w || !Number.isFinite(w.temp)) return null;
       const c = condition(w.code, w.isDay),
-        imperial = options.units === 'imperial';
+        imperial = options.units === 'imperial',
+        place = store.state().location;
       return {
+        // The place the weather is for (saved or resolved automatically): no new request, '' when unknown.
+        location: (place && place.name) || (typeof w.city === 'string' ? w.city : ''),
         temp: Math.round(imperial ? (w.temp * 9) / 5 + 32 : w.temp),
         unit: imperial ? '°F' : '°C',
         label: t(c.label),
