@@ -9,6 +9,25 @@ A small fork of [Clean Your TV for LG webOS](https://github.com/Razdva122/clean-
 - Weather (Settings → Weather) is placed on the left, under the clock, in every format.
 - The forecast format shows **3 days** instead of 4 (labelled "3 days").
 
+## Info features
+
+These appear **only while mr.redify is selected**; Classic and every other theme show none of them. Settings has four new tabs (visible with mr.redify): **Idle screen**, **Rates & holidays**, **Calendar** and **Football**.
+
+- **Idle screen**: after a period without input Home shows a full-screen overlay: big clock with date and weather, or an info panel. Choose the style and the timeout (off, 5, 10 or 30 minutes; default 10) in the Idle screen tab. The image is dimmed and moves slowly to protect OLED panels; any key closes it.
+- **Calendar**: month view with Romanian public holidays (including the movable Orthodox Easter dates) and name days, plus your own events, stored on the TV.
+- **Exchange rates**: official BNR (National Bank of Romania) rates for the currencies you pick in Rates & holidays.
+- **Football**: fixtures, results and standings for the leagues and teams you follow, taken from ESPN.
+- **Romanian**: Romanian is added to the UI languages.
+
+**BNR rates need the Home Helper updated.** Reinstall it with `./install.sh <TV IP>`; until then the rates page shows "service update required". Rates are not available in the Root edition.
+
+Data sources and limits:
+
+- Football uses ESPN's unofficial public endpoints, which can change or disappear without notice. Romanian Liga 1 data from ESPN is currently limited and often stale; a later change is planned to use another source for it.
+- Exchange rates come from the public BNR XML feed and update once per banking day.
+- The LG system screensaver may start before the idle screen on some TVs. If it does, lengthen or turn off the screensaver in the TV's own settings; the idle screen cannot override it.
+- Nothing leaves the TV except requests for public data (BNR, ESPN, weather). Your events, picks and settings stay on the TV.
+
 ## Install
 
 You need an LG webOS TV with Developer Mode, and a computer on the same network with Node.js 20.19+, npm, Python 3.9+ and Git.
