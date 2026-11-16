@@ -8,8 +8,8 @@ const assert = require('node:assert/strict'),
     info = page.locator('#btnInfo'),
     panel = page.locator('#infoPanel');
   await page.evaluate(() => {
-    // The real calendar page is registered first; keep its slot but make it a plain page here.
-    ['calendar', 'one', 'two'].forEach((id) =>
+    // The real calendar and rates pages are registered first; keep their slots but make them plain pages here.
+    ['calendar', 'finance', 'one', 'two'].forEach((id) =>
       InfoPanel.registerPage({
         id,
         label: id,
@@ -57,6 +57,8 @@ const assert = require('node:assert/strict'),
   assert.equal(await panel.isVisible(), true, 'panel open');
   assert.equal(await pageText(), 'page-calendar');
   await page.keyboard.press('ArrowRight');
+  assert.equal(await pageText(), 'page-finance');
+  await page.keyboard.press('ArrowRight');
   assert.equal(await pageText(), 'page-one');
   assert.equal(await page.evaluate(() => window.__shown_one), 1);
   await page.keyboard.press('ArrowRight');
@@ -66,6 +68,8 @@ const assert = require('node:assert/strict'),
   assert.equal(await pageText(), 'page-two', 'no wrap past last page');
   await page.keyboard.press('ArrowLeft');
   assert.equal(await pageText(), 'page-one');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await pageText(), 'page-finance');
   await page.keyboard.press('ArrowLeft');
   assert.equal(await pageText(), 'page-calendar');
   await page.keyboard.press('ArrowLeft');
@@ -115,7 +119,7 @@ const assert = require('node:assert/strict'),
   assert.equal(await info.isVisible(), true);
   assert.deepEqual(home.errors, [], 'page errors');
   await home.close();
-  // Fresh page: only the built-in calendar page is registered; the panel opens on it.
+  // Fresh page: only the built-in pages are registered; the panel opens on it.
   const empty = await openHome({ mrRedify: true });
   await empty.page.evaluate(() => InfoPanel.open());
   assert.equal(await empty.page.locator('#infoPanel').isVisible(), true);

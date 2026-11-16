@@ -56,6 +56,16 @@ HomeI18n.add({
     'No': 'Nu',
     'Enter a title': 'Introdu un titlu',
     'Event limit reached (50)': 'Limita de evenimente atinsă (50)',
-    'Event added': 'Eveniment adăugat'
+    'Event added': 'Eveniment adăugat',
+    'Exchange rates': 'Curs valutar',
+    'Service update required: reinstall Home Helper': 'Actualizare necesară: reinstalează Home Helper',
+    'Offline': 'Fără conexiune',
+    'Last updated': 'Ultima actualizare',
+    'Rates unavailable': 'Cursurile nu sunt disponibile',
+    'Calendar marks': 'Marcaje în calendar',
+    'Holidays': 'Sărbători',
+    'Name days': 'Onomastici',
+    'Keep at least one currency': 'Păstrează cel puțin o monedă',
+    'At most 8 currencies': 'Cel mult 8 monede'
   }
 });

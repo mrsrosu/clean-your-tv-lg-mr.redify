@@ -1,0 +1,81 @@
+/* Exchange rates page (info panel) and the Rates & holidays settings tab. */
+.fin-page {
+  height: 100%;
+}
+.fin-page .fin-title {
+  font-size: 44px;
+  font-weight: 500;
+}
+.fin-page .fin-date {
+  font-size: 26px;
+  margin: 6px 0 24px;
+  opacity: 0.65;
+}
+.fin-page .fin-row {
+  display: flex;
+  align-items: baseline;
+  width: 900px;
+  padding: 12px 0;
+  font-size: 38px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.fin-page .fin-code {
+  width: 140px;
+  font-weight: 700;
+}
+.fin-page .fin-value {
+  flex: 1;
+}
+.fin-page .fin-arrow {
+  width: 50px;
+  text-align: center;
+  font-size: 30px;
+}
+.fin-page .fin-arrow.up {
+  color: #ff8a7a;
+}
+.fin-page .fin-arrow.down {
+  color: #7fd1ff;
+}
+.fin-page .fin-status {
+  margin-top: 24px;
+  font-size: 24px;
+  opacity: 0.8;
+}
+/* Settings tab */
+.fin-tab .fin-section {
+  margin-bottom: 24px;
+}
+.fin-tab .fin-section-title {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+.fin-tab button {
+  font-size: 24px;
+  padding: 10px 18px;
+  margin: 0 12px 10px 0;
+}
+.fin-tab button.selected {
+  border-color: #7fd1ff;
+  background: rgba(127, 209, 255, 0.25);
+}
+.fin-tab .fin-field {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+.fin-tab .fin-field-label {
+  display: inline-block;
+  min-width: 220px;
+  font-size: 24px;
+}
+.fin-tab .fin-chips {
+  display: flex;
+  flex-wrap: wrap;
+}
+.fin-tab .fin-status,
+.fin-tab .fin-hint {
+  margin: 8px 0;
+  font-size: 22px;
+  opacity: 0.85;
+}
