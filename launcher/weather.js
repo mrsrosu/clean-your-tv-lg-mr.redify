@@ -407,7 +407,7 @@
             effective === 'text'
               ? time.bottom + 20
               : weatherLeft
-                ? time.bottom + 26
+                ? time.bottom + 20
                 : buttons.bottom + 26;
         if (state.preset === 'side-grid') {
           left = effective === 'text' ? 560 : 1920 - 112 - width * scale;

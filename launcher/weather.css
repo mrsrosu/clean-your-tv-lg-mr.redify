@@ -663,3 +663,9 @@ body.editing #homeWeather {
 .weather-settings .weather-provider-choices [data-weather-provider='auto'] {
   flex: 0.6;
 }
+/* Local mr.redify fork: the weather block sits right under the clock row, so its header is as tall as its content and
+   starts at the top (the fixed 224 px box centred the city and temperature about 80 px below the date). */
+#homeSurface.ctv-mr-redify[data-layout='dock-grid'] #homeWeather .weather-header {
+  height: auto;
+  align-items: flex-start;
+}
