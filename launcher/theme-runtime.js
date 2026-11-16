@@ -523,6 +523,7 @@
       surface.classList[
         manifest.layout.motion === 'classic' ? 'add' : 'remove'
       ]('ctv-classic-motion');
+      scopeChanged();
     }
     release(previous && previous.handles, ownedHandles);
     if (root.HomePresentationController)
@@ -536,6 +537,14 @@
       previous.videoLease.dispose();
 
     return { themeId: manifest.id, themeVersion: manifest.themeVersion };
+  }
+  // Tells info-store.js (loaded later, only listens) that the mr.redify class may have changed.
+  function scopeChanged() {
+    try {
+      const ev = root.document.createEvent('Event');
+      ev.initEvent('ctv-scope', false, false);
+      root.document.dispatchEvent(ev);
+    } catch (_) {}
   }
   function reset() {
     var current = sheet(),
@@ -561,6 +570,7 @@
       surface.classList.remove('ctv-theme-active');
       surface.classList.remove('ctv-classic-motion');
       surface.classList.remove('ctv-mr-redify');
+      scopeChanged();
     }
     release(previous && previous.handles, null);
     if (root.HomePresentationController)
