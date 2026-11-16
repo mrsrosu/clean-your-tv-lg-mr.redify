@@ -63,6 +63,7 @@ if primary && { has ui || has tv; }; then
   npm run lint:compat
   npm run test:themes
   npm run test:weather
+  npm run test:info
   for test in root-edition/ui/test-*.cjs; do
     if [[ "$test" != *"-browser.cjs" ]]; then node "$test"; fi
   done

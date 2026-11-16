@@ -43,7 +43,7 @@ assert.equal(
   false,
   'blocked storage must not pretend to persist or reload'
 );
-assert.equal(x.i.languages.length, 13);
+assert.equal(x.i.languages.length, 14);
 assert.equal(load(['cs-CZ']).i.language(), 'cs');
 assert.equal(load(['cs_CZ.UTF-8']).i.language(), 'cs');
 assert.equal(load(['en'], 'cs').i.language(), 'cs');

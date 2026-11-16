@@ -15,6 +15,7 @@
     "prepare": "husky",
     "format:staged": "lint-staged --config .lintstagedrc.json",
     "test:weather": "node tests/weather/transport.cjs && node tests/weather/service.cjs && node tests/weather/service-runtime.cjs && node tests/weather/contract.cjs && node tests/weather/data.cjs && node tests/weather/providers.cjs && node tests/weather/layout.cjs",
+    "test:info": "node tests/info/ro-locale.cjs",
     "test:weather:browser": "node tests/weather/ui.cjs && node tests/weather/matrix.cjs"
   },
   "browserslist": [

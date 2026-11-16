@@ -146,7 +146,7 @@ const base = process.env.PREVIEW_URL || 'http://127.0.0.1:8876';
         await page.locator('[data-category=language]').click();
         assert.equal(
           await page.locator('#settingsLanguageChoices button').count(),
-          14,
+          15,
           'languages are directly available in the category'
         );
         assert.equal(
@@ -248,7 +248,7 @@ const base = process.env.PREVIEW_URL || 'http://127.0.0.1:8876';
         await context.close();
       }
     console.log(
-      'PASS thirteen TV languages, app name preservation, inline remote navigation, persisted override and automatic reset'
+      'PASS fourteen TV languages, app name preservation, inline remote navigation, persisted override and automatic reset'
     );
     for (const edition of ['launcher', 'root-launcher']) {
       const context = await browser.newContext({
