@@ -14,7 +14,8 @@
   'use strict';
   var doc = root.document,
     info = root.HomeInfo,
-    espn = root.FootballEspn,
+    espn = root.FootballEspn, // also the single list of competitions (ids and names)
+    sportsdb = root.FootballSportsDb, // Liga 1 (rou.1): ESPN data for it is stale
     MAX_TEAMS = 5,
     HOUR = 3600000,
     TTL_HOURLY = 55 * 60000, // a little under the hourly timer, so the timer always finds the cache expired
@@ -25,6 +26,15 @@
     clock = function () {
       return new Date();
     };
+
+  // Provider of a competition: SportsDB for rou.1, ESPN for every other id.
+  function provider(id) {
+    return sportsdb && sportsdb.handles(id) ? sportsdb : espn;
+  }
+  // Cache keys of a provider's data: ESPN's stay as they were; SportsDB's are separate (other team ids).
+  function ck(prefix, id) {
+    return prefix + (provider(id).keyTag || '') + id;
+  }
 
   function t(text) {
     return root.HomeI18n ? root.HomeI18n.t(text) : text;
@@ -207,8 +217,69 @@
     });
     return post.slice(-3).concat(live, pre.slice(0, 3));
   }
-  // Never rejects. state: ok | offline | empty (nothing configured: no request); live: a followed team is in play.
+  // Team ids differ between providers. A followed team of a competition that moved to SportsDB (rou.1, stored with an
+  // ESPN id) is looked up by name in the provider's team list and re-saved with the new id; no match: it stays as it
+  // is (shows no data until the user picks it again in Settings). Never rejects; no request unless such a team exists.
+  function plain(name) {
+    return String(name)
+      .toLowerCase()
+      .replace(/[ăâ]/g, 'a')
+      .replace(/î/g, 'i')
+      .replace(/[șş]/g, 's')
+      .replace(/[țţ]/g, 't')
+      .replace(/[^a-z0-9]/g, '');
+  }
+  function migrate() {
+    var teams = store ? store.get().teams : [],
+      comps = [];
+    teams.forEach(function (x) {
+      if (provider(x.competition) !== espn && comps.indexOf(x.competition) < 0)
+        comps.push(x.competition);
+    });
+    if (!comps.length || !root.HomeInfoFetch) return root.Promise.resolve();
+    return root.Promise.all(
+      comps.map(function (c) {
+        return root.HomeInfoFetch.cached(
+          ck('fb.teams.', c),
+          TTL_TEAMS,
+          function () {
+            return provider(c).teams(c);
+          }
+        ).then(
+          function (r) {
+            return { c: c, list: Array.isArray(r.value) ? r.value : [] };
+          },
+          function () {
+            return { c: c, list: [] };
+          }
+        );
+      })
+    ).then(function (lists) {
+      var changed = false,
+        next = store.get().teams.map(function (x) {
+          var entry = lists.filter(function (l) {
+            return l.c === x.competition;
+          })[0];
+          if (!entry || !entry.list.length) return x;
+          var hit = null,
+            i;
+          for (i = 0; i < entry.list.length; i++)
+            if (entry.list[i].id === x.id) return x;
+          for (i = 0; i < entry.list.length && !hit; i++)
+            if (plain(entry.list[i].name) === plain(x.name))
+              hit = entry.list[i];
+          if (!hit) return x;
+          changed = true;
+          return { competition: x.competition, id: hit.id, name: hit.name };
+        });
+      if (changed) store.set({ teams: next });
+    });
+  }
   function refresh() {
+    return migrate().then(refreshNow);
+  }
+  // Never rejects. state: ok | offline | empty (nothing configured: no request); live: a followed team is in play.
+  function refreshNow() {
     var s = store ? store.get() : { competitions: [], teams: [] },
       comps = [],
       cache = root.HomeInfoFetch,
@@ -243,9 +314,9 @@
       jobs.push({
         kind: 'boards',
         key: c,
-        cache: 'fb.sb.' + c,
+        cache: ck('fb.sb.', c),
         load: function () {
-          return espn.scoreboard(c);
+          return provider(c).scoreboard(c);
         }
       });
     });
@@ -253,11 +324,13 @@
       jobs.push({
         kind: 'teams',
         key: teamKey(x),
-        cache: 'fb.tm.' + x.competition + '.' + x.id,
+        cache: ck('fb.tm.', x.competition) + '.' + x.id,
         load: function () {
-          return espn.teamMatches(x.competition, x.id).then(function (list) {
-            return windowed(list, nowMs);
-          });
+          return provider(x.competition)
+            .teamMatches(x.competition, x.id)
+            .then(function (list) {
+              return windowed(list, nowMs);
+            });
         }
       });
     });
@@ -572,8 +645,8 @@
         return;
       loading[c] = true;
       failedAt[c] = 0;
-      root.HomeInfoFetch.cached('fb.teams.' + c, TTL_TEAMS, function () {
-        return espn.teams(c);
+      root.HomeInfoFetch.cached(ck('fb.teams.', c), TTL_TEAMS, function () {
+        return provider(c).teams(c);
       }).then(
         function (r) {
           loading[c] = false;

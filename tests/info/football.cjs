@@ -21,7 +21,7 @@ function memory(seed) {
     }
   };
 }
-// info-store.js + info-fetch.js + football-espn.js + football.js in a bare context; XHR served from `routes`
+// info-store.js + info-fetch.js + football-espn.js + football-sportsdb.js + football.js in a bare context; XHR served from `routes`
 // (url -> body string; a missing url answers 404; 'net' answers with a network error).
 function context(storage, routes, extra) {
   const surface = { classList: { contains: () => false } },
@@ -64,7 +64,13 @@ function context(storage, routes, extra) {
   );
   ctx.window = ctx;
   ctx.requests = requests;
-  for (const f of ['info-store', 'info-fetch', 'football-espn', 'football'])
+  for (const f of [
+    'info-store',
+    'info-fetch',
+    'football-espn',
+    'football-sportsdb',
+    'football'
+  ])
     vm.runInNewContext(fs.readFileSync('launcher/' + f + '.js', 'utf8'), ctx);
   return ctx;
 }
@@ -462,6 +468,266 @@ test('refresh: cached team matches are trimmed to a window around now', async ()
   const entry = JSON.parse(mem.data['tvhome.cache.v1.fb.tm.eng.1.359']);
   assert.ok(entry.value.length <= 8, 'trimmed: ' + entry.value.length);
   assert.match(ctx.HomeFootball.idleLines()[0], /01\.12|02\.12|\d\d\.12/);
+});
+// ---- Liga 1 (rou.1) from TheSportsDB; every other competition stays on ESPN ----
+const sdb = (n) =>
+  fs.readFileSync('tests/info/fixtures/sportsdb-' + n + '.json', 'utf8');
+const SB = 'https://www.thesportsdb.com/api/v1/json/123/',
+  NEXT = SB + 'eventsnextleague.php?id=4691',
+  PAST = SB + 'eventspastleague.php?id=4691',
+  ROUND = (n) => SB + 'eventsround.php?id=4691&r=' + n + '&s=2026-2027',
+  FCSB = '134005';
+const sdbRoutes = () => ({
+  [NEXT]: sdb('next'),
+  [PAST]: sdb('past'),
+  [ROUND(15)]: sdb('round15'),
+  [ROUND(16)]: sdb('round16')
+});
+function followFcsb(ctx, id) {
+  ctx.HomeFootball.setClock(() => new Date(NOW));
+  ctx.HomeInfo.football.set({
+    competitions: ['rou.1'],
+    teams: [{ competition: 'rou.1', id: id || FCSB, name: 'FCSB' }]
+  });
+}
+test('sportsdb: competitions list rou.1 once (ESPN list keeps the ids and names)', () => {
+  const ctx = context(memory(), {});
+  assert.deepEqual(
+    ctx.FootballSportsDb.competitions.map((c) => c.id),
+    ['rou.1']
+  );
+  assert.equal(
+    ctx.FootballEspn.competitions.filter((c) => c.id === 'rou.1').length,
+    1
+  );
+  assert.equal(ctx.FootballSportsDb.handles('eng.1'), false);
+});
+test('sportsdb scoreboard: the two matchdays around now, Match shape, UTC start', async () => {
+  const ctx = context(memory(), sdbRoutes()),
+    list = await ctx.FootballSportsDb.scoreboard('rou.1');
+  assert.deepEqual(
+    ctx.requests.slice().sort(),
+    [NEXT, PAST, ROUND(15), ROUND(16)].sort()
+  );
+  assert.equal(list.length, 16);
+  const done = list.find((m) => m.id === '2503054'),
+    todo = list.find((m) => m.id === '2503062');
+  assert.deepEqual(done, {
+    id: '2503054',
+    competition: 'rou.1',
+    home: { id: '138191', name: 'Botoșani', score: 1 },
+    away: { id: '135929', name: 'Oțelul Galați', score: 1 },
+    start: '2026-11-09T18:00:00Z',
+    state: 'post',
+    clock: ''
+  });
+  assert.equal(todo.state, 'pre');
+  assert.equal(todo.start, '2026-11-20T15:30:00Z');
+  assert.equal(todo.home.score, null);
+  assert.equal(todo.away.score, null);
+  assert.deepEqual(
+    list.map((m) => m.start),
+    list.map((m) => m.start).sort(),
+    'sorted by start'
+  );
+});
+test('sportsdb teams: all 16 teams from a matchday, sorted by name', async () => {
+  const ctx = context(memory(), sdbRoutes()),
+    list = await ctx.FootballSportsDb.teams('rou.1');
+  assert.equal(list.length, 16);
+  assert.ok(list.some((x) => x.id === FCSB && x.name === 'FCSB'));
+  assert.deepEqual(
+    list.map((x) => x.name),
+    list.map((x) => x.name).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+  );
+});
+test('sportsdb teamMatches: one team from rounds 13..18 (missing rounds do not break it)', async () => {
+  const ctx = context(memory(), sdbRoutes()),
+    list = await ctx.FootballSportsDb.teamMatches('rou.1', FCSB);
+  assert.deepEqual(
+    ctx.requests.filter((u) => u.indexOf('eventsround') >= 0).length,
+    6
+  );
+  assert.deepEqual(
+    list.map((m) => [m.state, m.home.name, m.away.name]),
+    [
+      ['post', 'FCSB', 'Corvinul Hunedoara'],
+      ['pre', 'Argeș Pitești', 'FCSB']
+    ]
+  );
+  await assert.rejects(ctx.FootballSportsDb.teamMatches('eng.1', FCSB));
+  await assert.rejects(ctx.FootballSportsDb.teamMatches('rou.1', ''));
+});
+test('sportsdb: statuses (live / postponed / unknown) and odd events', async () => {
+  const ev = (o) =>
+    Object.assign(
+      {
+        idEvent: '1',
+        idHomeTeam: '10',
+        idAwayTeam: '20',
+        strHomeTeam: 'A',
+        strAwayTeam: 'B',
+        intHomeScore: '2',
+        intAwayScore: '1',
+        dateEvent: '2026-11-16',
+        strTime: '11:00:00',
+        strStatus: '2H',
+        strProgress: "67'"
+      },
+      o
+    );
+  const body = JSON.stringify({
+    events: [
+      ev({ idEvent: '1' }),
+      ev({ idEvent: '2', strStatus: 'PST' }),
+      ev({ idEvent: '3', strStatus: 'whatever' }),
+      ev({ idEvent: '4', strStatus: 'HT', strProgress: undefined }),
+      ev({ idEvent: '5', intHomeScore: null, strStatus: 'NS' }),
+      ev({ idEvent: '6', dateEvent: 'x' }),
+      ev({ idEvent: '', strStatus: 'FT' }),
+      ev({ idEvent: '8', strHomeTeam: '' }),
+      null,
+      'x'
+    ]
+  });
+  const ctx = context(memory(), {
+      [NEXT]: JSON.stringify({
+        events: [{ intRound: '16', strSeason: '2026-2027' }]
+      }),
+      [PAST]: '{"events":null}',
+      [ROUND(16)]: body,
+      [ROUND(15)]: body,
+      [ROUND(14)]: body,
+      [ROUND(17)]: body,
+      [ROUND(18)]: body
+    }),
+    list = await ctx.FootballSportsDb.scoreboard('rou.1');
+  assert.deepEqual(
+    list.map((m) => [m.id, m.state, m.clock, m.home.score]),
+    [
+      ['1', 'in', "67'", 2],
+      ['4', 'in', 'HT', 2],
+      ['5', 'pre', '', null]
+    ]
+  );
+});
+test('sportsdb: odd JSON gives [] and no exception; HTTP failure rejects', async () => {
+  for (const body of ['{}', '[]', '{"events":"x"}', '{"events":null}']) {
+    const ctx = context(memory(), {
+      [NEXT]: body,
+      [PAST]: body
+    });
+    assert.deepEqual(await ctx.FootballSportsDb.scoreboard('rou.1'), [], body);
+    assert.deepEqual(await ctx.FootballSportsDb.teams('rou.1'), [], body);
+    assert.deepEqual(
+      await ctx.FootballSportsDb.teamMatches('rou.1', '1'),
+      [],
+      body
+    );
+  }
+  // Not JSON (an HTML/proxy page) or 404/429 or network error: rejects, nothing cached.
+  for (const body of ['<html>429</html>', undefined, 'net']) {
+    const mem = memory(),
+      ctx = context(mem, { [NEXT]: body, [PAST]: body });
+    await assert.rejects(ctx.FootballSportsDb.scoreboard('rou.1'));
+    assert.deepEqual(
+      Object.keys(mem.data).filter((k) => k.indexOf('tvhome.cache.v1.') === 0),
+      []
+    );
+  }
+});
+test('routing: rou.1 asks SportsDB, eng.1 asks ESPN, in one refresh', async () => {
+  const ctx = context(memory(), Object.assign(routes(), sdbRoutes()));
+  ctx.HomeFootball.setClock(() => new Date(NOW));
+  ctx.HomeInfo.football.set({
+    competitions: ['eng.1', 'rou.1'],
+    teams: [
+      { competition: 'eng.1', id: '359', name: 'Arsenal' },
+      { competition: 'rou.1', id: FCSB, name: 'FCSB' }
+    ]
+  });
+  const r = await ctx.HomeFootball.refresh();
+  assert.equal(r.state, 'ok');
+  const espn = ctx.requests.filter((u) => u.indexOf('espn.com') >= 0),
+    other = ctx.requests.filter((u) => u.indexOf('thesportsdb.com') >= 0);
+  assert.equal(espn.length, 3);
+  assert.ok(
+    espn.every((u) => /\/eng\.1\//.test(u)),
+    'no ESPN request for rou.1'
+  );
+  assert.ok(
+    other.length >= 4 && other.length <= 8,
+    'sportsdb: ' + other.length
+  );
+  assert.equal(ctx.requests.length, espn.length + other.length);
+  const lines = ctx.HomeFootball.idleLines();
+  assert.equal(lines.length, 2);
+  assert.ok(lines.some((l) => /Arsenal/.test(l)));
+  assert.ok(
+    lines.some((l) => /Argeș Pitești – FCSB 22\.11/.test(l)),
+    lines.join('|')
+  );
+});
+test('refresh rou.1: SportsDB budget: at most 8 requests per hour, none while cached', async () => {
+  const ctx = context(memory(), sdbRoutes());
+  followFcsb(ctx);
+  await ctx.HomeFootball.refresh();
+  const n = ctx.requests.length;
+  assert.ok(n <= 8, 'hourly requests: ' + n);
+  assert.ok(ctx.requests.every((u) => u.indexOf('thesportsdb.com') >= 0));
+  await ctx.HomeFootball.refresh();
+  assert.equal(ctx.requests.length, n, 'cached');
+});
+test('stale store: a rou.1 team saved with an ESPN id is re-resolved by name, no crash', async () => {
+  const mem = memory(),
+    ctx = context(mem, sdbRoutes());
+  followFcsb(ctx, '3000'); // ESPN-era id
+  ctx.HomeInfo.football.set({
+    teams: [
+      { competition: 'rou.1', id: '3000', name: 'FCSB' },
+      { competition: 'rou.1', id: '3001', name: 'Rapid Bucureşti' }, // old spelling with cedilla
+      { competition: 'rou.1', id: '3002', name: 'Echipa Disparuta' }
+    ]
+  });
+  const r = await ctx.HomeFootball.refresh();
+  assert.equal(r.state, 'ok');
+  const teams = ctx.HomeInfo.football.get().teams;
+  assert.equal(teams[0].id, FCSB);
+  assert.equal(teams[1].name, 'Rapid București');
+  assert.notEqual(teams[1].id, '3001');
+  assert.equal(teams[2].id, '3002', 'no match: kept as saved');
+  assert.match(ctx.HomeFootball.idleLines().join('|'), /FCSB/);
+  // The old ESPN cache entries for rou.1 are never read: separate keys.
+  assert.ok(
+    Object.keys(mem.data).every((k) => !/fb\.(sb|tm|teams)\.rou\.1/.test(k))
+  );
+});
+test('refresh rou.1: SportsDB failing -> cached values, offline; ESPN competitions unaffected', async () => {
+  const mem = memory();
+  let ctx = context(mem, Object.assign(routes(), sdbRoutes()));
+  ctx.HomeFootball.setClock(() => new Date(NOW));
+  ctx.HomeInfo.football.set({
+    competitions: ['eng.1', 'rou.1'],
+    teams: [
+      { competition: 'eng.1', id: '359', name: 'Arsenal' },
+      { competition: 'rou.1', id: FCSB, name: 'FCSB' }
+    ]
+  });
+  await ctx.HomeFootball.refresh();
+  for (const k of Object.keys(mem.data))
+    if (k.indexOf('tvhome.cache.v1.') === 0) {
+      const e = JSON.parse(mem.data[k]);
+      e.fetchedAt -= 2 * 3600000;
+      mem.data[k] = JSON.stringify(e);
+    }
+  ctx = context(
+    mem,
+    Object.assign(routes(), { [NEXT]: '<html>', [PAST]: 'net' })
+  );
+  ctx.HomeFootball.setClock(() => new Date(NOW));
+  const r = await ctx.HomeFootball.refresh();
+  assert.equal(r.state, 'offline');
+  assert.equal(ctx.HomeFootball.idleLines().length, 2, 'cached lines kept');
 });
 (async () => {
   for (const [name, fn] of tests) {

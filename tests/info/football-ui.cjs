@@ -4,6 +4,8 @@ const assert = require('node:assert/strict'),
   { openHome } = require('./harness.cjs');
 const fx = (n) =>
   fs.readFileSync('tests/info/fixtures/espn-' + n + '.json', 'utf8');
+const sdb = (n) =>
+  fs.readFileSync('tests/info/fixtures/sportsdb-' + n + '.json', 'utf8');
 const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
 // Football page (info panel) and Football tab, mr.redify scope; ESPN answered from fixtures (no live internet).
 (async () => {
@@ -59,6 +61,29 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
             ? fx('schedule')
             : null;
     if (body === null) return route.fulfill({ status: 404, body: '' });
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+      body
+    });
+  });
+  // Liga 1 (rou.1) comes from TheSportsDB, answered from fixtures too.
+  const sdbSeen = [];
+  await page.route(/^https:\/\/www\.thesportsdb\.com\//, (route) => {
+    const url = route.request().url();
+    sdbSeen.push(url);
+    const body = /eventsnextleague/.test(url)
+      ? sdb('next')
+      : /eventspastleague/.test(url)
+        ? sdb('past')
+        : /eventsround\.php\?id=4691&r=15&/.test(url)
+          ? sdb('round15')
+          : /eventsround\.php\?id=4691&r=16&/.test(url)
+            ? sdb('round16')
+            : null;
+    if (state.mode === 'offline' || body === null)
+      return route.fulfill({ status: 404, body: '' });
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -343,6 +368,32 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
     competitions: [],
     teams: []
   });
+
+  await page.evaluate(() => document.getElementById('renewalClose').click());
+  // 9. Liga 1 from TheSportsDB next to a Premier League team (both providers mocked), an old ESPN-id team re-matched.
+  await setup({
+    competitions: ['eng.1', 'rou.1'],
+    teams: [TEAM, { competition: 'rou.1', id: '3000', name: 'FCSB' }]
+  });
+  sdbSeen.length = 0;
+  await open();
+  await page.waitForSelector('#infoPanel .fb-team .fb-next >> nth=1');
+  const t9 = await text();
+  assert.match(t9, /Arsenal/);
+  assert.match(t9, /FCSB/);
+  assert.match(t9, /Argeș Pitești/, 'FCSB next match from SportsDB');
+  assert.match(t9, /Liga 1 România/, "Liga 1 in today's matches");
+  assert.ok(sdbSeen.length >= 4 && sdbSeen.length <= 8, 'sportsdb requests');
+  assert.equal(
+    seen.filter((u) => /^rou\.1\//.test(u)).length,
+    0,
+    'no ESPN request for rou.1'
+  );
+  assert.equal(
+    await page.evaluate(() => HomeInfo.football.get().teams[1].id),
+    '134005',
+    'old team id re-resolved by name'
+  );
 
   assert.deepEqual(home.errors, [], 'no page errors');
   await home.close();

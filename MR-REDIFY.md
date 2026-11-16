@@ -16,17 +16,17 @@ These appear **only while mr.redify is selected**; Classic and every other theme
 - **Idle screen**: after a period without input Home shows a full-screen overlay: big clock with date and weather, or an info panel. Choose the style and the timeout (off, 5, 10 or 30 minutes; default 10) in the Idle screen tab. The image is dimmed and moves slowly to protect OLED panels; any key closes it.
 - **Calendar**: month view with Romanian public holidays (including the movable Orthodox Easter dates) and name days, plus your own events, stored on the TV.
 - **Exchange rates**: official BNR (National Bank of Romania) rates for the currencies you pick in Rates & holidays.
-- **Football**: fixtures, results and standings for the leagues and teams you follow, taken from ESPN.
+- **Football**: fixtures, results and standings for the leagues and teams you follow, taken from ESPN (Romanian Liga 1 from TheSportsDB).
 - **Romanian**: Romanian is added to the UI languages.
 
 **BNR rates need the Home Helper updated.** Reinstall it with `./install.sh <TV IP>`; until then the rates page shows "service update required". Rates are not available in the Root edition.
 
 Data sources and limits:
 
-- Football uses ESPN's unofficial public endpoints, which can change or disappear without notice. Romanian Liga 1 data from ESPN is currently limited and often stale; a later change is planned to use another source for it.
+- Football uses unofficial, free public sources that can change, be rate limited or disappear without notice: ESPN's endpoints for the Premier League, La Liga, Serie A, Bundesliga, Ligue 1 and the UEFA competitions, and TheSportsDB's free key for Romanian Liga 1 (ESPN's Liga 1 data was stale). The free TheSportsDB key allows only a few requests per minute, so Liga 1 updates at most about once an hour and the live score refresh is slower than for the other leagues. A Liga 1 team followed before this change is matched again by name; if that fails, pick it again in Settings.
 - Exchange rates come from the public BNR XML feed and update once per banking day.
 - The LG system screensaver may start before the idle screen on some TVs. If it does, lengthen or turn off the screensaver in the TV's own settings; the idle screen cannot override it.
-- Nothing leaves the TV except requests for public data (BNR, ESPN, weather). Your events, picks and settings stay on the TV.
+- Nothing leaves the TV except requests for public data (BNR, ESPN, TheSportsDB, weather). Your events, picks and settings stay on the TV.
 
 ## Install
 
