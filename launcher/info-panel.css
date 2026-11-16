@@ -2,7 +2,7 @@
 #btnInfo[hidden],
 #infoPanel[hidden],
 #infoPanel .info-page[hidden],
-#infoPanel .info-tabs[hidden],
+#infoPanel .info-tab[hidden],
 #infoPanel .info-empty[hidden] {
   display: none;
 }
@@ -25,7 +25,8 @@
   display: flex;
   margin-bottom: 32px;
 }
-#infoPanel .info-tab {
+#infoPanel .info-tab,
+#infoPanel .info-back {
   margin-right: 16px;
   padding: 12px 32px;
   border: 2px solid rgba(255, 255, 255, 0.22);
@@ -34,6 +35,24 @@
   color: inherit;
   font: inherit;
   font-size: 28px;
+}
+#infoPanel .info-back {
+  display: flex;
+  align-items: center;
+  margin-right: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+#infoPanel .info-back-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+  fill: currentColor;
+}
+#infoPanel .info-tab.focused,
+#infoPanel .info-back.focused {
+  border-color: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.55);
 }
 #infoPanel .info-tab.selected {
   background: rgba(255, 255, 255, 0.18);

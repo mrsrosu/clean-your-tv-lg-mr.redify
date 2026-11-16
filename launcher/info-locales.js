@@ -17,6 +17,7 @@ HomeI18n.add({
     'Calendar': 'Calendar',
     'Football': 'Fotbal',
     'Info': 'Informații',
+    'Back to menu': 'Înapoi la meniu',
     'Nothing to show yet': 'Nimic de afișat încă',
     'January': 'ianuarie',
     'February': 'februarie',

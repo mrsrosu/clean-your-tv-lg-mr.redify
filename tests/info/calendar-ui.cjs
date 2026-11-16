@@ -73,6 +73,22 @@ const assert = require('node:assert/strict'),
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   assert.doesNotMatch(await detail(), /Florin/);
+  // Up in the first week row of the month falls through to the panel: Back button focused, calendar idle.
+  assert.match(await cls(5), /selected/);
+  await page.keyboard.press('ArrowUp');
+  assert.equal(
+    await page.evaluate(() =>
+      document.getElementById('infoBack').classList.contains('focused')
+    ),
+    true,
+    'Up from the first row reaches Back'
+  );
+  assert.match(await title(), /April 2026/, 'no month change');
+  await page.keyboard.press('ArrowLeft'); // stays on Back, calendar not moved
+  assert.match(await cls(5), /selected/);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown'); // calendar moves again: 12 Apr
+  assert.match(await cls(12), /selected/, 'Down returns to the grid');
   await page.evaluate(() => HomeInfo.daily.reset());
 
   // 2. Own events appear on the grid and in the detail.

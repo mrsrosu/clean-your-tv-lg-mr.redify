@@ -385,7 +385,11 @@
     } else if (key === 39) {
       if (column === 6) return false;
       selected = shift(selected, 1);
-    } else if (key === 38) selected = shift(selected, -7);
+    } else if (key === 38) {
+      // First week row of the month: fall through, the panel moves focus to its top row (Back).
+      if (shift(selected, -7).month !== selected.month) return false;
+      selected = shift(selected, -7);
+    }
     else if (key === 40) selected = shift(selected, 7);
     else if (key === 33 || key === 427) selected = shiftMonth(selected, -1);
     else if (key === 34 || key === 428) selected = shiftMonth(selected, 1);

@@ -98,6 +98,74 @@ const assert = require('node:assert/strict'),
   assert.equal(await panel.isVisible(), true, 'click opens');
   await page.keyboard.press('Escape');
   assert.equal(await panel.isVisible(), false);
+  // Back to menu button (owner feedback): visible, pointer and remote reachable.
+  const back = page.locator('#infoBack'),
+    rowFocus = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll('#infoPanel .info-tabs > *'))
+          .map((b) => (b.classList.contains('focused') ? b.id || b.textContent : ''))
+          .filter(Boolean)
+      );
+  assert.equal(await back.isVisible(), false, 'no button while closed');
+  await info.click();
+  assert.equal(await panel.isVisible(), true);
+  assert.equal(await back.isVisible(), true, 'Back button visible');
+  assert.equal((await back.innerText()).trim(), 'Back to menu');
+  assert.equal(await back.locator('svg').count(), 1, 'arrow icon');
+  assert.equal(
+    await page.evaluate(
+      () => document.querySelector('#infoPanel .info-tabs').firstElementChild.id
+    ),
+    'infoBack',
+    'first item of the tab row'
+  );
+  await back.click();
+  assert.equal(await panel.isVisible(), false, 'click on Back closes');
+  assert.deepEqual(await topState(), { focused: true, open: false });
+  // Remote: Up from the page reaches the button, Enter closes.
+  await page.keyboard.press('Enter');
+  assert.equal(await panel.isVisible(), true);
+  assert.deepEqual(await rowFocus(), [], 'page focus first');
+  await page.keyboard.press('ArrowUp');
+  assert.deepEqual(await rowFocus(), ['infoBack'], 'Up reaches Back');
+  await page.keyboard.press('Enter');
+  assert.equal(await panel.isVisible(), false, 'Enter on Back closes');
+  assert.deepEqual(await topState(), { focused: true, open: false });
+  // Row navigation: Left/Right between Back and tabs, Enter switches page, Down returns to the page.
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowLeft');
+  assert.deepEqual(await rowFocus(), ['infoBack'], 'Left stops at Back');
+  assert.equal(await pageText(), 'page-calendar', 'row Left does not switch page');
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(await rowFocus(), ['calendar']);
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(await rowFocus(), ['finance']);
+  await page.keyboard.press('Enter');
+  assert.equal(await pageText(), 'page-finance', 'Enter on a tab switches page');
+  assert.equal(await panel.isVisible(), true);
+  await page.keyboard.press('ArrowDown');
+  assert.deepEqual(await rowFocus(), [], 'Down returns to the page');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await pageText(), 'page-football', 'page keys work again');
+  // Back / Esc still close from the row too, consumed.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Escape');
+  assert.equal(await panel.isVisible(), false, 'Esc closes from the row');
+  assert.deepEqual(await topState(), { focused: true, open: false });
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  const rowBack = await page.evaluate(() => {
+    const ev = new KeyboardEvent('keydown', { keyCode: 461, bubbles: true, cancelable: true });
+    document.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  assert.equal(rowBack, true);
+  assert.equal(await panel.isVisible(), false, 'Back closes from the row');
+  // Reopened: row focus is not remembered.
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await rowFocus(), []);
+  await page.keyboard.press('Escape');
   // Scope off while open closes the panel and hides the button.
   await page.keyboard.press('Enter');
   assert.equal(await panel.isVisible(), true);
@@ -105,6 +173,9 @@ const assert = require('node:assert/strict'),
   assert.equal(await panel.isVisible(), false, 'scope off closes');
   assert.equal(await info.isVisible(), false, 'button hidden');
   assert.equal(await page.evaluate(() => InfoPanel.isOpen()), false);
+  assert.equal(await back.isVisible(), false, 'scope off: no Back button');
+  await page.evaluate(() => InfoPanel.open());
+  assert.equal(await back.isVisible(), false, 'scope off: open() is a no-op');
   // Off: arrows never land on it, even from Settings.
   await page.keyboard.press('ArrowUp');
   for (let i = 0; i < 6; i++) {
@@ -149,6 +220,10 @@ const assert = require('node:assert/strict'),
     'Informații'
   );
   assert.equal(await ro.page.locator('#btnInfo').getAttribute('title'), 'Informații');
+  assert.equal(
+    (await ro.page.locator('#infoBack').innerText()).trim(),
+    'Înapoi la meniu'
+  );
   await ro.page.evaluate(() => {
     InfoPanel.close();
     localStorage.removeItem('tvhome.language');
