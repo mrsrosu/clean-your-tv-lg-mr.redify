@@ -168,6 +168,30 @@ test('sanitize: dim clamped, style/blocks/seconds checked', () => {
     dim: 10
   });
 });
+test('stored corrupt value goes through sanitize in get() (store + idle)', () => {
+  const data = {},
+    surface = { classList: { contains: () => false } },
+    sctx = {
+      document: {
+        getElementById: () => surface,
+        addEventListener() {}
+      },
+      localStorage: {
+        getItem: (k) => (k in data ? data[k] : null),
+        setItem(k, v) {
+          data[k] = String(v);
+        }
+      }
+    };
+  sctx.window = sctx;
+  vm.runInNewContext(fs.readFileSync('launcher/info-store.js', 'utf8'), sctx);
+  const store = sctx.HomeInfo.createStore('tvhome.idle.v1', DEFAULTS, sanitize);
+  data['tvhome.idle.v1'] = '{"timeoutMin":"abc","dim":400}';
+  const got = store.get();
+  assert.equal(got.timeoutMin, 10);
+  assert.equal(got.dim, 100);
+  assert.equal(got.style, 'clock');
+});
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

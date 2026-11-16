@@ -90,6 +90,14 @@ test('corrupt JSON resets to defaults without throwing', () => {
   assert.deepEqual(s.get(), defaults);
   assert.deepEqual(s.set({ timeoutMin: 15 }), { enabled: true, timeoutMin: 15 });
 });
+test('get() sanitizes a corrupt stored object instead of trusting it', () => {
+  const mem = memory();
+  mem.data.k = '{"timeoutMin":"abc","enabled":"yes","extra":1}';
+  const s = context(mem).HomeInfo.createStore('k', defaults, sanitize);
+  assert.deepEqual(s.get(), defaults);
+  mem.data.k = '{"timeoutMin":15,"enabled":false}';
+  assert.deepEqual(s.get(), { enabled: false, timeoutMin: 15 });
+});
 test('throwing localStorage does not throw and get() returns defaults', () => {
   const boom = {
       getItem() {
