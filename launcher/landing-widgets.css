@@ -25,10 +25,10 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-card {
   box-sizing: border-box;
-  margin-top: 10px;
-  padding: 7px 16px 7px;
+  margin-top: 8px;
+  padding: 6px 22px 6px;
   border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 26px;
+  border-radius: 28px;
   background-color: rgba(255, 255, 255, 0.12);
   background-image: linear-gradient(
     180deg,
@@ -45,8 +45,8 @@ body.idle-active #landingWidgets,
 #landingWidgets .lw-head {
   display: flex;
   align-items: center;
-  height: 24px;
-  font-size: 16px;
+  height: 28px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -54,9 +54,9 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-icon {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
+  width: 26px;
+  height: 26px;
+  margin-right: 10px;
   fill: currentColor;
 }
 #landingWidgets .lw-label {
@@ -68,16 +68,16 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-meta {
   flex-shrink: 0;
-  margin-left: 8px;
-  font-size: 15px;
+  margin-left: 10px;
+  font-size: 22px;
   font-weight: 400;
 }
 #landingWidgets .lw-line {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 18px;
-  line-height: 24px;
+  font-size: 28px;
+  line-height: 34px;
 }
 #landingWidgets .lw-match {
   margin-top: 0;
@@ -85,8 +85,8 @@ body.idle-active #landingWidgets,
 #landingWidgets .lw-teams {
   display: flex;
   align-items: center;
-  font-size: 18px;
-  line-height: 26px;
+  font-size: 28px;
+  line-height: 36px;
 }
 #landingWidgets .lw-team {
   display: flex;
@@ -96,9 +96,9 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-team img {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  margin-right: 6px;
+  width: 30px;
+  height: 30px;
+  margin-right: 8px;
   object-fit: contain;
 }
 #landingWidgets .lw-name {
@@ -109,26 +109,26 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-dash {
   flex-shrink: 0;
-  margin: 0 6px;
+  margin: 0 10px;
   opacity: 0.6;
 }
 #landingWidgets .lw-sub {
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 22px;
+  line-height: 24px;
   color: rgba(255, 255, 255, 0.72);
 }
 #landingWidgets .lw-live .lw-sub {
   color: #ff8a80;
 }
-/* Month grid: 7 columns of 42 px, rows of 32 px, nothing marked but today. */
+/* Month grid: 7 columns of 62 px, rows of 36 px; the text size follows the weather block (34 px values). */
 #landingWidgets .lw-grid {
-  padding: 8px 17px 8px;
+  padding: 8px 22px 8px;
 }
 #landingWidgets .lw-month {
-  height: 28px;
-  font-size: 20px;
+  height: 36px;
+  font-size: 30px;
   font-weight: 600;
-  line-height: 28px;
+  line-height: 36px;
   text-align: center;
   text-transform: capitalize;
 }
@@ -137,21 +137,21 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-cell {
   display: block;
-  width: 42px;
-  height: 32px;
-  font-size: 20px;
-  line-height: 32px;
+  width: 62px;
+  height: 36px;
+  font-size: 28px;
+  line-height: 36px;
   text-align: center;
 }
 #landingWidgets .lw-weekday {
-  height: 24px;
-  font-size: 14px;
-  line-height: 24px;
+  height: 28px;
+  font-size: 22px;
+  line-height: 28px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.6);
 }
 #landingWidgets .lw-today {
-  border-radius: 16px;
+  border-radius: 18px;
   background-color: rgba(255, 255, 255, 0.9);
   color: #0b0d18;
   font-weight: 600;

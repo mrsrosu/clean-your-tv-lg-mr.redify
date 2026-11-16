@@ -2,7 +2,8 @@
 const assert = require('node:assert/strict'),
   { openHome } = require('./harness.cjs');
 // Main-page widgets (mr.redify only): month grid + Name day / Exchange / Football cards. Visibility matrix, content,
-// three-column geometry at 1920x1080 (weather | grid | cards), timers and requests.
+// three-column geometry at 1920x1080 against the REAL weather block (forecast format, 3 days, Bucharest, like the TV),
+// text sizes, timers and requests.
 const NOW = '2026-11-16T12:00:00Z'; // a Monday
 const RATES = {
   date: '2026-11-16',
@@ -94,19 +95,35 @@ const visible = (page) => page.evaluate(() => HomeLanding.visible());
 const ALL = { calendar: true, nameday: true, rates: true, football: true };
 const NONE = { calendar: false, nameday: false, rates: false, football: false };
 const ORDER = ['calendar', 'nameday', 'rates', 'football'];
-// Real weather block stand-in (no weather data in the harness): left 112, top = clock row bottom + 26, like weather.js.
+// Real weather block (forecast format, 3 days) from a seeded cache: the same data the TV showed. A width overrides it to
+// simulate a wider block (compact format / large scale); no width renders the real one again.
+const WEATHER_SEED = {
+  version: 1,
+  provider: 'open-meteo',
+  enabled: true,
+  preferred: 'forecast',
+  mode: 'manual',
+  location: { name: 'Bucharest', latitude: 44.4268, longitude: 26.1, country: 'Romania' },
+  caches: {
+    'open-meteo': {
+      key: '44.427,26.100',
+      updated: 0,
+      data: { temp: 7, code: 61, isDay: false, timezone: 'Europe/Bucharest', offset: 7200, time: '2026-11-16T23:06', days: [
+        { date: '2026-11-16', low: 7, high: 7, code: 61 },
+        { date: '2026-11-17', low: 6, high: 13, code: 61 },
+        { date: '2026-11-18', low: 8, high: 14, code: 2 }
+      ] }
+    }
+  }
+};
 const weather = (page, width) =>
   page.evaluate((w) => {
-    const el = document.getElementById('homeWeather'),
-      tr = document.getElementById('timeRow').getBoundingClientRect();
-    el.hidden = !w;
-    if (!w) return;
-    el.style.left = '112px';
-    el.style.top = tr.bottom + 26 + 'px';
-    el.style.width = w + 'px';
-    el.style.height = '220px';
-    el.style.transform = 'scale(1)';
-    el.style.background = 'rgba(255,0,0,.1)';
+    const el = document.getElementById('homeWeather');
+    if (w) {
+      el.style.width = w + 'px';
+      return;
+    }
+    HomeWeather.render();
   }, width);
 const rect = (sel) =>
   `(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width, height: b.height }; })()`;
@@ -116,9 +133,20 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   const home = await openHome({ mrRedify: true }),
     page = home.page;
   let requests = 0;
+  // The weather block asks its own providers; only the football and BNR hosts count here.
   page.on('request', (r) => {
-    if (/^https?:/.test(r.url())) requests++;
+    if (/^https?:/.test(r.url()) && /espn|thesportsdb|bnr\.ro/.test(r.url())) requests++;
   });
+  await page.context().addInitScript((seedJson) => {
+    const w = JSON.parse(seedJson);
+    w.caches['open-meteo'].updated = Date.now();
+    localStorage.setItem('tvhome.weather.v1', JSON.stringify(w));
+  }, JSON.stringify(WEATHER_SEED));
+  await page.reload();
+  await page.waitForFunction(() => window.RootLauncherRendered && window.HomeInfo);
+  await home.setScope(true);
+  await page.evaluate(() => HomeWeather.render());
+  assert.equal(await page.evaluate(() => document.getElementById('homeWeather').hidden), false, 'real weather block is shown');
   await seed(page);
   await room(page, true);
 
@@ -259,66 +287,109 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   await home.setScope(true);
   assert.deepEqual((await state(page)).cards, ORDER);
 
-  // 9. Geometry at 1920x1080, three columns on one row: weather | grid | cards. Real positions (app name at 532).
+  // 9. Geometry at 1920x1080, three columns on one row: weather | grid | cards, against the real weather block. The TV
+  // measured: timeRow [112,82,1248,104], weather [112,.,660,.], hero top 567, topButtons [1392,90,416,84].
   await seed(page);
   await toggles(page, ALL);
-  await weather(page, 660);
-  await room(page, false);
-  await page.evaluate(() => HomeLanding.render());
+  await weather(page, 0);
+  const tvRoom = () =>
+    page.evaluate(() => {
+      window.__real = window.__real || { hero: '', dock: '' };
+      document.getElementById('hero').style.top = '567px';
+      document.getElementById('dockBand').style.top = '680px';
+      HomeLanding.render();
+    });
+  await tvRoom();
   const geo = async () => ({
     grid: await page.evaluate(rect('#landingWidgets .lw-grid')),
     stack: await page.evaluate(rect('#landingWidgets .lw-stack')),
     cards: await page.evaluate(
-      `Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-stack .lw-card'), (c) => { const b = c.getBoundingClientRect(); return { id: c.getAttribute('data-lw'), left: b.left, right: b.right, top: b.top, bottom: b.bottom }; })`
+      `Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-stack .lw-card'), (c) => { const b = c.getBoundingClientRect(); return { id: c.getAttribute('data-lw'), left: b.left, right: b.right, top: b.top, bottom: b.bottom, lines: c.querySelectorAll('.lw-line, .lw-sub').length }; })`
     ),
     weather: await page.evaluate(rect('#homeWeather')),
     buttons: await page.evaluate(rect('#topButtons')),
     hero: await page.evaluate(rect('#hero')),
     time: await page.evaluate(rect('#timeRow')),
-    heroTop: await page.evaluate(() => parseFloat(document.getElementById('hero').style.top))
+    heroTop: await page.evaluate(() => parseFloat(document.getElementById('hero').style.top)),
+    weatherTextTop: await page.evaluate(() => {
+      const r = document.createRange();
+      r.selectNodeContents(document.querySelector('#homeWeather .weather-city'));
+      return r.getBoundingClientRect().top;
+    })
   });
   let g = await geo();
-  assert.ok(g.grid && g.stack, 'grid and cards on the real space');
+  assert.ok(g.grid && g.stack, 'grid and cards present');
   assert.equal(g.stack.right, 1808, 'cards right edge = header buttons right edge');
-  assert.equal(g.stack.width, 316);
-  assert.equal(g.grid.width, 330);
+  assert.equal(g.stack.width, 500);
+  assert.equal(g.grid.width, 490);
   assert.ok(g.grid.right <= g.stack.left, 'grid left of the cards');
-  assert.ok(g.weather.right <= g.grid.left, 'weather left of the grid: ' + g.weather.right + ' <= ' + g.grid.left);
-  // Tops follow the weather block (clock row bottom + 26) where the columns are clear of the header buttons.
-  assert.equal(Math.round(g.weather.top), Math.round(g.time.bottom + 26));
+  assert.equal(Math.round(g.weather.left), 112);
+  assert.equal(Math.round(g.weather.width), 660);
+  assert.ok(g.weather.right + 24 <= g.grid.left + 0.5, 'weather left of the grid with a gap: ' + g.weather.right + ' / ' + g.grid.left);
+  // The weather block sits right under the date row: its first visible text starts within 30 px of the date row's bottom.
+  assert.ok(g.weatherTextTop <= g.time.bottom + 30, 'weather text top ' + g.weatherTextTop + ' vs date bottom ' + g.time.bottom);
+  assert.ok(g.weatherTextTop >= g.time.bottom, 'not above the date row');
   assert.equal(Math.round(g.grid.top), Math.round(g.weather.top), 'grid top = weather top');
   assert.equal(Math.round(g.stack.top), Math.round(g.weather.top), 'cards top = weather top');
-  [g.weather, g.grid, g.stack].forEach((r, i) => {
-    assert.equal(overlap(r, g.buttons), false, 'column ' + i + ' vs header buttons');
-    assert.equal(overlap(r, g.hero), false, 'column ' + i + ' vs app name');
-    assert.ok(r.bottom <= g.heroTop || i === 0, 'above the app name');
-  });
-  assert.equal(overlap(g.weather, g.grid), false);
-  assert.equal(overlap(g.grid, g.stack), false);
-  assert.equal(overlap(g.weather, g.stack), false);
-  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'], 'all three cards fit');
+  const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const named = { weather: g.weather, grid: g.grid, stack: g.stack, buttons: g.buttons, hero: g.hero, time: g.time };
+  const names = Object.keys(named);
+  for (let i = 0; i < names.length; i++)
+    for (let j = i + 1; j < names.length; j++)
+      assert.equal(overlap(named[names[i]], named[names[j]]), false, 'overlap: ' + names[i] + ' / ' + names[j] + ' ' + JSON.stringify([named[names[i]], named[names[j]]]));
+  [g.grid, g.stack].forEach((r) => assert.ok(r.bottom <= g.heroTop - 19, 'above the app name'));
+  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'], 'all three cards fit at the TV hero position');
+  // At the TV hero position the full cards do not fit: Exchange is reduced to one line, Football keeps its two events.
+  assert.equal(g.cards.find((c) => c.id === 'rates').lines, 1, 'Exchange reduced to one line');
+  assert.equal(await page.locator('#landingWidgets [data-lw="football"] .lw-match').count(), 2, 'two football events');
+  assert.equal(await page.locator('#landingWidgets [data-lw="nameday"] .lw-line').count(), 1);
   for (let i = 1; i < g.cards.length; i++) {
     const gap = g.cards[i].top - g.cards[i - 1].bottom;
     assert.ok(gap >= 8 && gap <= 12, 'about 10 px gap: ' + gap);
   }
-  assert.ok(g.grid.height >= 240 && g.grid.height <= 300, 'grid about 260 px high: ' + g.grid.height);
+  assert.ok(g.grid.height >= 280 && g.grid.height <= 340, 'grid height: ' + g.grid.height);
+  // Text sizes follow the weather block: its detail text is 34 px; ours is at least 0.8 of it.
+  const sizes = await page.evaluate(() => {
+    const fs = (sel) => Array.prototype.map.call(document.querySelectorAll(sel), (e) => parseFloat(getComputedStyle(e).fontSize));
+    const w = document.querySelector('#homeWeather .weather-row'),
+      c = document.querySelector('#homeWeather .weather-city');
+    return {
+      weatherDetail: parseFloat(getComputedStyle(w).fontSize),
+      weatherTitle: parseFloat(getComputedStyle(c).fontSize),
+      body: fs('#landingWidgets .lw-line').concat(fs('#landingWidgets .lw-cell:not(.lw-weekday)'), fs('#landingWidgets .lw-teams')),
+      titles: fs('#landingWidgets .lw-head')
+    };
+  });
+  assert.equal(sizes.weatherDetail, 34);
+  assert.ok(sizes.body.length >= 30);
+  sizes.body.forEach((f) => assert.ok(f >= sizes.weatherDetail * 0.8, 'font ' + f + ' >= ' + sizes.weatherDetail * 0.8));
+  sizes.titles.forEach((f) => assert.ok(f >= 20, 'title font ' + f));
+
+  // 9a. At the harness app-name position (532, the room is smaller): still no overlap; cards go compact, then drop.
+  await page.evaluate(() => {
+    document.getElementById('hero').style.top = '532px';
+    HomeLanding.render();
+  });
+  g = await geo();
+  assert.ok(g.grid && g.stack && g.cards.length >= 2, 'fits at 532: ' + JSON.stringify(g.cards.map((c) => c.id)));
+  [g.grid, g.stack].forEach((r) => assert.ok(r.bottom <= 532 - 19));
+  assert.equal(overlap(g.stack, g.hero), false);
+  assert.equal(overlap(g.grid, g.hero), false);
+  await tvRoom();
 
   // 9b. Columns whose top would collide with the header buttons start just below them.
   await page.evaluate(() => {
-    const tr = document.getElementById('timeRow');
-    window.__timeTop = tr.style.marginTop;
     document.getElementById('homeWeather').style.top = '60px';
     HomeLanding.render();
   });
   g = await geo();
   assert.ok(g.stack.top >= g.buttons.bottom + 19, 'cards start below the buttons: ' + g.stack.top + ' vs ' + g.buttons.bottom);
-  assert.ok(g.grid.top >= g.buttons.bottom + 19 || g.grid.right <= g.buttons.left, 'grid clear of the buttons');
   assert.equal(overlap(g.stack, g.buttons), false);
   assert.equal(overlap(g.grid, g.buttons), false);
-  await weather(page, 660);
-  await page.evaluate(() => HomeLanding.render());
+  await weather(page, 0);
+  await tvRoom();
 
-  // 9c. A hero that starts higher drops whole parts: cards from the end, then the grid; nothing is clipped.
+  // 9c. A hero that starts higher: compact cards first, then whole parts are dropped (cards from the end, then the grid).
   await page.evaluate(() => {
     document.getElementById('hero').style.top = '400px';
     HomeLanding.render();
@@ -326,42 +397,47 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   g = await geo();
   assert.equal(g.grid, null, 'grid dropped when it does not fit');
   assert.ok(g.cards.length >= 1 && g.cards.length < 3, 'cards dropped from the end: ' + g.cards.length);
-  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'].slice(0, g.cards.length));
+  // Football has priority: Exchange goes first, then Name day, then Football's second event, then Football.
+  assert.ok(g.cards.some((c) => c.id === 'football'), 'Football kept: ' + g.cards.map((c) => c.id));
+  assert.ok(!g.cards.some((c) => c.id === 'rates'), 'Exchange dropped before Football');
   g.cards.forEach((c) => assert.ok(c.bottom <= 400 - 19, 'inside the shorter space'));
+  await page.evaluate(() => {
+    document.getElementById('hero').style.top = '330px'; // room for one football event only
+    HomeLanding.render();
+  });
+  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), ['football']);
+  assert.equal(await page.locator('#landingWidgets [data-lw="football"] .lw-match').count(), 1, 'second event dropped before the card');
   await page.evaluate(() => {
     document.getElementById('hero').style.top = '60px'; // nothing fits
     HomeLanding.render();
   });
   assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), []);
   assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
-  await page.evaluate(() => {
-    document.getElementById('hero').style.top = window.__real.hero;
-    HomeLanding.render();
-  });
+  await tvRoom();
 
   // 9d. A wide weather block (compact format, large scale) pushes the cards out first, then the grid; never overlapped.
-  await weather(page, 1250);
+  await weather(page, 1000);
   await page.evaluate(() => HomeLanding.render());
   g = await geo();
   assert.equal(g.stack, null, 'cards column given up for the weather block');
   assert.ok(g.grid && g.grid.left >= g.weather.right, 'grid kept right of the weather block');
   assert.equal(overlap(g.weather, g.grid), false);
-  await weather(page, 1600);
+  await weather(page, 1400);
   await page.evaluate(() => HomeLanding.render());
   assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), [], 'nothing left: nothing shown');
-  await weather(page, 660);
-  await page.evaluate(() => HomeLanding.render());
+  await weather(page, 0);
+  await tvRoom();
 
   // 10. Long team names: the card keeps its width, names are cut with an ellipsis.
   await seed(page, { long: true });
   await toggles(page, { calendar: false, nameday: false, rates: false, football: true });
   g = await geo();
-  assert.equal(g.stack.width, 316);
+  assert.equal(g.stack.width, 500);
   const cut = await page.evaluate(() =>
     Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-name'), (n) => n.scrollWidth > n.clientWidth)
   );
   assert.equal(cut, true, 'long names are truncated, not wrapped');
-  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollWidth <= 316), true);
+  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollWidth <= 500), true);
 
   // 11. Romanian: month title, weekday names and card titles are localized.
   await seed(page);

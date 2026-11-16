@@ -471,49 +471,63 @@
     return out;
   }
 
-  // Main-page card (landing-widgets.js), stored data only, no request. For every followed team the live match, else
-  // the next one, else the last result; shared matches once; live first, then next by start, then last (newest first);
-  // at most 3 items { kind: 'live'|'next'|'last', match, text } where text is the second line (score, kick-off, result).
+  // Main-page card (landing-widgets.js), stored data only, no request. Up to 2 different matches from the followed
+  // teams, by priority: live matches first, then the next matches by start time, then the last results (newest first);
+  // a match two followed teams play against each other counts once. Items { kind: 'live'|'next'|'last', match, text }
+  // where text is the second line (live minute and score, kick-off, final score and day).
   function landingItems() {
-    var picked = [],
+    var live = [],
+      next = [],
+      last = [],
       seen = {},
       snap = readSnap();
-    if (!store) return picked;
+    if (!store) return [];
     statuses(snap, clock().toISOString()).forEach(function (x) {
-      var kind = x.status.live
-          ? 'live'
-          : x.status.next
-            ? 'next'
-            : x.status.last
-              ? 'last'
-              : '',
-        m = kind && x.status[kind];
-      if (!m || seen[m.id]) return;
-      seen[m.id] = true;
-      picked.push({ kind: kind, match: m });
+      [
+        ['live', x.status.live, live],
+        ['next', x.status.next, next],
+        ['last', x.status.last, last]
+      ].forEach(function (c) {
+        if (c[1]) c[2].push({ kind: c[0], match: c[1] });
+      });
     });
-    var rank = { live: 0, next: 1, last: 2 };
-    picked.sort(function (a, b) {
-      if (rank[a.kind] !== rank[b.kind]) return rank[a.kind] - rank[b.kind];
-      var d = ms(a.match.start) - ms(b.match.start);
-      return a.kind === 'last' ? -d : d;
+    next.sort(function (a, b) {
+      return ms(a.match.start) - ms(b.match.start);
     });
-    return picked.slice(0, 3).map(function (p) {
-      var m = p.match,
-        score = (m.home.score === null ? '?' : m.home.score) +
-          ' - ' +
-          (m.away.score === null ? '?' : m.away.score);
-      return {
-        kind: p.kind,
-        match: m,
-        text:
-          p.kind === 'live'
-            ? t('Live') + (m.clock ? ' ' + clockText(m.clock) : '') + ' · ' + score
-            : p.kind === 'next'
-              ? dayOf(m.start) + ' ' + timeOf(m.start)
-              : t('FT') + ' ' + score + ' · ' + dayOf(m.start)
-      };
+    last.sort(function (a, b) {
+      return ms(b.match.start) - ms(a.match.start);
     });
+    live.sort(function (a, b) {
+      return ms(a.match.start) - ms(b.match.start);
+    });
+    return live
+      .concat(next, last)
+      .filter(function (p) {
+        if (seen[p.match.id]) return false;
+        seen[p.match.id] = true;
+        return true;
+      })
+      .slice(0, 2)
+      .map(function (p) {
+        var m = p.match,
+          score =
+            (m.home.score === null ? '?' : m.home.score) +
+            ' - ' +
+            (m.away.score === null ? '?' : m.away.score);
+        return {
+          kind: p.kind,
+          match: m,
+          text:
+            p.kind === 'live'
+              ? t('Live') +
+                (m.clock ? ' ' + clockText(m.clock) : '') +
+                ' · ' +
+                score
+              : p.kind === 'next'
+                ? dayOf(m.start) + ' ' + timeOf(m.start)
+                : t('FT') + ' ' + score + ' · ' + dayOf(m.start)
+        };
+      });
   }
 
   // ---- team logos ----

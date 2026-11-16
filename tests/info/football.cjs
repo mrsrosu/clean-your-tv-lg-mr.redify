@@ -885,13 +885,70 @@ test('nat: store accepts it (competition and team), counts towards the 5; status
   const r = await ctx.HomeFootball.refresh();
   assert.equal(r.state, 'ok');
   const items = ctx.HomeFootball.landingItems();
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 2, 'next match and last result (two events)');
   assert.equal(items[0].kind, 'next');
+  assert.equal(items[1].kind, 'last');
   assert.equal(items[0].match.away.name, 'Romania');
   assert.match(ctx.HomeFootball.idleLines()[0], /Bosnia – Romania 20\.11/);
   const reqs = ctx.requests.length;
   await ctx.HomeFootball.refresh();
   assert.equal(ctx.requests.length, reqs, 'cached (hourly): no new requests');
+});
+// Main-page Football card items: up to 2 different matches, live first, then the next ones by start, then the last result.
+function landingCtx(teams, board, teamLists) {
+  const mem = memory(),
+    ctx = context(mem, {});
+  ctx.HomeFootball.setClock(() => new Date('2026-11-16T12:00:00Z'));
+  ctx.HomeInfo.football.set({ competitions: ['eng.1'], teams: teams.map((id) => ({ competition: 'eng.1', id, name: 'T' + id })) });
+  mem.data['tvhome.football.snapshot.v1'] = JSON.stringify({ boards: { 'eng.1': board }, teams: teamLists || {} });
+  return ctx;
+}
+const M = (id, h, a, state, start, hs, as) => ({
+  id,
+  competition: 'eng.1',
+  home: { id: h, name: 'H' + h, score: state === 'pre' ? null : hs },
+  away: { id: a, name: 'A' + a, score: state === 'pre' ? null : as },
+  start,
+  state,
+  clock: state === 'in' ? "34'" : ''
+});
+test('landingItems: no event -> none; one -> one; three -> two in priority order', () => {
+  assert.deepEqual(landingCtx(['1', '2', '3'], []).HomeFootball.landingItems(), []);
+  const one = landingCtx(['1'], [M('a', '1', '9', 'pre', '2026-11-20T15:00:00Z')]).HomeFootball.landingItems();
+  assert.deepEqual(one.map((x) => [x.kind, x.match.id]), [['next', 'a']]);
+  const three = landingCtx(['1', '2', '3'], [
+    M('last', '3', '9', 'post', '2026-11-14T15:00:00Z', 1, 0),
+    M('next', '2', '8', 'pre', '2026-11-21T15:00:00Z'),
+    M('live', '1', '7', 'in', '2026-11-16T11:00:00Z', 2, 2)
+  ]).HomeFootball.landingItems();
+  assert.deepEqual(three.map((x) => [x.kind, x.match.id]), [['live', 'live'], ['next', 'next']]);
+  assert.match(three[0].text, /^Live 34' · 2 - 2$/);
+  assert.match(three[1].text, /^21\.11 \d\d:\d\d$/);
+});
+test('landingItems: nexts by start time, last result only when nothing else, same match once', () => {
+  const nexts = landingCtx(['1', '2', '3'], [
+    M('late', '1', '7', 'pre', '2026-11-25T15:00:00Z'),
+    M('soon', '2', '8', 'pre', '2026-11-18T15:00:00Z'),
+    M('mid', '3', '9', 'pre', '2026-11-20T15:00:00Z')
+  ]).HomeFootball.landingItems();
+  assert.deepEqual(nexts.map((x) => x.match.id), ['soon', 'mid']);
+  const lasts = landingCtx(['1', '2', '3'], [
+    M('old', '1', '7', 'post', '2026-11-01T15:00:00Z', 1, 0),
+    M('new', '2', '8', 'post', '2026-11-14T15:00:00Z', 0, 0)
+  ]).HomeFootball.landingItems();
+  assert.deepEqual(lasts.map((x) => [x.kind, x.match.id]), [['last', 'new'], ['last', 'old']]);
+  // Two followed teams playing each other: the match is listed once, the next item is another match.
+  const dup = landingCtx(['1', '2'], [
+    M('derby', '1', '2', 'pre', '2026-11-19T15:00:00Z'),
+    M('other', '1', '5', 'post', '2026-11-10T15:00:00Z', 3, 1)
+  ]).HomeFootball.landingItems();
+  assert.equal(dup.filter((x) => x.match.id === 'derby').length, 1);
+  assert.deepEqual(dup.map((x) => x.match.id), ['derby', 'other']);
+  // One team with a live match and a next one: both items (priority live, next).
+  const both = landingCtx(['1'], [], {
+    'eng.1:1': [M('l', '1', '7', 'in', '2026-11-16T11:00:00Z', 0, 1), M('n', '1', '8', 'pre', '2026-11-23T15:00:00Z')]
+  }).HomeFootball.landingItems();
+  assert.deepEqual(both.map((x) => [x.kind, x.match.id]), [['live', 'l'], ['next', 'n']]);
 });
 (async () => {
   for (const [name, fn] of tests) {

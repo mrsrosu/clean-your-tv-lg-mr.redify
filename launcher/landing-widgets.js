@@ -26,9 +26,10 @@
   var HOUR = 3600000,
     MINUTE = 60000,
     RIGHT = 1808, // right edge of the header buttons and of the cards
-    CARDS_W = 316,
-    GRID_W = 330,
-    COL_GAP = 24, // between columns (and between a column and the weather block)
+    CARDS_W = 500, // the free width right of the weather block (x 772 to 1808) is shared by the grid and the cards
+    GRID_W = 490,
+    COL_GAP = 22, // between the grid and the cards
+    WEATHER_GAP = 24, // between the weather block and the grid
     BUTTONS_GAP = 20, // under the header buttons
     BOTTOM_GAP = 20, // above the app name / dock
     SCREEN_GAP = 40, // above the bottom edge when nothing else limits
@@ -111,9 +112,10 @@
     c.appendChild(head);
     return c;
   }
-  function textCard(id, data) {
+  // level 1 = compact: one line per card (the titles stay), used when level 0 does not fit.
+  function textCard(id, data, level) {
     var c = card(id, data.title, data.meta);
-    (data.lines || []).forEach(function (line) {
+    (level ? (data.lines || []).slice(0, 1) : data.lines || []).forEach(function (line) {
       c.appendChild(el('div', 'lw-line', line));
     });
     return c;
@@ -149,7 +151,7 @@
     var box = el('span', 'lw-team'),
       logo =
         side.logo && root.HomeFootball && root.HomeFootball.logoNode
-          ? root.HomeFootball.logoNode(side.logo, 22)
+          ? root.HomeFootball.logoNode(side.logo, 30)
           : null;
     if (logo) box.appendChild(logo);
     box.appendChild(
@@ -178,7 +180,7 @@
     return c;
   }
   // { grid: node | null, cards: [node] } for the toggles that are ON and have data.
-  function build() {
+  function build(level) {
     var w = wanted(),
       out = { grid: null, cards: [] },
       data;
@@ -188,15 +190,15 @@
     }
     if (w.nameday && root.HomeCalendar && root.HomeCalendar.landingNameDay) {
       data = safe(root.HomeCalendar.landingNameDay, null);
-      if (data) out.cards.push(textCard('nameday', data));
+      if (data) out.cards.push(textCard('nameday', data, level));
     }
     if (w.rates && root.HomeInfoFinance && root.HomeInfoFinance.landingCard) {
       data = safe(root.HomeInfoFinance.landingCard, null);
-      if (data) out.cards.push(textCard('rates', data));
+      if (data) out.cards.push(textCard('rates', data, level));
     }
     if (w.football && root.HomeFootball && root.HomeFootball.landingItems) {
       data = safe(root.HomeFootball.landingItems, []);
-      if (data.length) out.cards.push(footballCard(data.slice(0, 1)));
+      if (data.length) out.cards.push(footballCard(data.slice(0, 2), level));
     }
     return out;
   }
@@ -271,20 +273,40 @@
     node.style.width = width + 'px';
     return top;
   }
+  // Removes the least important thing left in the cards stack.
+  function dropOne(stack) {
+    var order = ['rates', 'nameday'],
+      i,
+      node,
+      items;
+    for (i = 0; i < order.length; i++) {
+      node = stack.querySelector('[data-lw="' + order[i] + '"]');
+      if (node) return stack.removeChild(node);
+    }
+    node = stack.querySelector('[data-lw="football"]');
+    items = node ? node.querySelectorAll('.lw-match') : [];
+    if (items.length > 1) return node.removeChild(items[items.length - 1]);
+    if (node) return stack.removeChild(node);
+    return stack.removeChild(stack.lastChild);
+  }
   function layout(parts) {
     var b = bounds(),
       grid = parts.grid,
       stack = parts.stack,
       room,
       top;
+    var dropped = false;
     function fits(node, t) {
       return node.offsetHeight <= b.bottom - t;
     }
     if (stack) {
       top = place(stack, RIGHT - CARDS_W, CARDS_W, b);
-      // Cards from the end until the stack ends above the limit; nothing left: no stack.
-      while (stack.children.length && !fits(stack, top))
-        stack.removeChild(stack.lastChild);
+      // Until the stack ends above the limit: the Exchange card goes first, then Name day, then Football's second item,
+      // then Football (Football has priority over the others, as far as the geometry allows).
+      while (stack.children.length && !fits(stack, top)) {
+        dropOne(stack);
+        dropped = true;
+      }
       if (!stack.children.length) {
         host.removeChild(stack);
         stack = null;
@@ -294,19 +316,23 @@
       var right = stack ? RIGHT - CARDS_W - COL_GAP : RIGHT,
         left = right - GRID_W;
       // Never over the weather block: first give up the cards column (the grid moves right), then the grid.
-      if (b.weatherRight && left < b.weatherRight + COL_GAP && stack) {
+      if (b.weatherRight && left < b.weatherRight + WEATHER_GAP && stack) {
         host.removeChild(stack);
         stack = null;
+        dropped = true;
         left = RIGHT - GRID_W;
       }
       top = place(grid, left, GRID_W, b);
       if (
-        (b.weatherRight && left < b.weatherRight + COL_GAP) ||
+        (b.weatherRight && left < b.weatherRight + WEATHER_GAP) ||
         !fits(grid, top)
-      )
+      ) {
         host.removeChild(grid);
+        dropped = true;
+      }
     }
     host.hidden = host.children.length === 0;
+    return dropped;
   }
 
   function suppressed() {
@@ -327,18 +353,22 @@
     host.innerHTML = '';
     host.hidden = true;
     if (!active()) return;
-    var parts = build(),
-      stack = null;
-    if (parts.cards.length) {
-      stack = el('div', 'lw-stack');
-      parts.cards.forEach(function (c) {
-        stack.appendChild(c);
-      });
+    // Full cards first; if something has to go, the compact cards (one line each); then whole cards are dropped.
+    for (var level = 0; level <= 1; level++) {
+      host.innerHTML = '';
+      var parts = build(level),
+        stack = null;
+      if (parts.cards.length) {
+        stack = el('div', 'lw-stack');
+        parts.cards.forEach(function (c) {
+          stack.appendChild(c);
+        });
+      }
+      if (parts.grid) host.appendChild(parts.grid);
+      if (stack) host.appendChild(stack);
+      host.hidden = false;
+      if (!layout({ grid: parts.grid, stack: stack })) break;
     }
-    if (parts.grid) host.appendChild(parts.grid);
-    if (stack) host.appendChild(stack);
-    host.hidden = false;
-    layout({ grid: parts.grid, stack: stack });
   }
 
   // ---- data and timers ----
