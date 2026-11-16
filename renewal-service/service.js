@@ -236,3 +236,7 @@ require('./weather')(service, {
   appId: 'com.gathin.tvhome',
   hold: themeReceiver.activityHold(service, 'weatherForecast')
 });
+require('./bnr')(service, {
+  appId: 'com.gathin.tvhome',
+  hold: themeReceiver.activityHold(service, 'bnrRates')
+});

@@ -52,6 +52,7 @@ assert Path('build/home-service/state/home-control/.keep').is_file()
 assert Path('build/home-service/theme-receiver/core.js').is_file()
 assert Path('build/home-service/theme-receiver/register.js').is_file()
 assert Path('build/home-service/weather.js').is_file()
+assert Path('build/home-service/bnr.js').is_file()
 files={'usr/palm/services/com.gathin.tvhome.renewal/state/home-control/.keep':b''}
 Path('dist/com.gathin.tvhome_9.8.7_all.ipk').write_bytes(ipk('com.gathin.tvhome','9.8.7',files))
 ''')
@@ -147,6 +148,7 @@ arch = 'arm' if helper else 'all'
                 if folder == 'renewal-service':
                     self.assertIn(prefix+'theme-receiver/core.js', files)
                     self.assertIn(prefix+'weather.js', files)
+                    self.assertIn(prefix+'bnr.js', files)
                     self.assertEqual(files[prefix+'ca-bundle.crt'], (ROOT/'renewal-service/ca-bundle.crt').read_bytes())
                     self.assertEqual(files[prefix+'ca-LICENSE.txt'], (ROOT/'renewal-service/ca-LICENSE.txt').read_bytes())
                     self.assertEqual(files[prefix+'state/home-control/.keep'], b'')
