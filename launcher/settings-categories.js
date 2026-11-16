@@ -386,13 +386,25 @@
         ) {
           var rect = active.getBoundingClientRect(),
             best = null,
-            distance = Infinity;
+            distance = Infinity,
+            // The info tabs (idle, rates, calendar, football) are forms with a label and a control per row, so the
+            // controls of consecutive rows do not line up horizontally: Up/Down go to the nearest ROW (then the
+            // nearest control in it) instead of requiring horizontal overlap, which skipped whole rows.
+            rowMode = false;
+          for (
+            var holder = active.parentNode;
+            holder && holder.nodeType === 1 && !rowMode;
+            holder = holder.parentNode
+          )
+            rowMode = /(^|\s)(idle|fin|cal|fb)-tab(\s|$)/.test(
+              holder.className || ''
+            );
           list.forEach(function (el) {
             if (el === active) return;
             var r = el.getBoundingClientRect(),
               vertical = key === 38 || key === 40;
             var overlap = vertical
-              ? r.right > rect.left + 4 && r.left < rect.right - 4
+              ? rowMode || (r.right > rect.left + 4 && r.left < rect.right - 4)
               : r.bottom > rect.top + 4 && r.top < rect.bottom - 4;
             var delta =
               key === 37
@@ -406,7 +418,9 @@
             var alignment = vertical
                 ? Math.abs(r.left + r.width / 2 - rect.left - rect.width / 2)
                 : Math.abs(r.top + r.height / 2 - rect.top - rect.height / 2),
-              score = Math.max(0, delta) + alignment;
+              score = rowMode && vertical
+                ? Math.max(0, delta) * 1000 + alignment
+                : Math.max(0, delta) + alignment;
             if (score < distance) {
               distance = score;
               best = el;
