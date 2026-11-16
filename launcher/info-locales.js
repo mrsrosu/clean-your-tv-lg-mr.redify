@@ -5,6 +5,8 @@ HomeI18n.add({
     'Idle screen': 'Ecran de repaus',
     'Rates & holidays': 'Cursuri și sărbători',
     'Calendar': 'Calendar',
-    'Football': 'Fotbal'
+    'Football': 'Fotbal',
+    'Info': 'Informații',
+    'Nothing to show yet': 'Nimic de afișat încă'
   }
 });

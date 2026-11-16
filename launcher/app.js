@@ -140,7 +140,8 @@
     topButtons = [
       getElement('btnInputs'),
       getElement('btnWifi'),
-      getElement('btnSettings')
+      getElement('btnSettings'),
+      getElement('btnInfo')
     ],
     inputsPanel = getElement('inputsPanel'),
     tiles = [],
@@ -957,7 +958,8 @@
           !okHoldTimer &&
           !pointerTimer &&
           !document.hidden &&
-          !(window.RenewalPanel && window.RenewalPanel.isOpen())
+          !(window.RenewalPanel && window.RenewalPanel.isOpen()) &&
+          !(window.InfoPanel && window.InfoPanel.isOpen())
         ) {
           rebuild(tiles[focusedTile] && tiles[focusedTile].app.id);
         }
@@ -1749,14 +1751,23 @@
       getElement('ambientBase').classList.add('baked');
     }, AMBIENT_FADE);
   }
+  // Nearest shown header button from index, looking in dir first (hidden ones are skipped).
+  function visibleTopButton(index, dir) {
+    var last = topButtons.length - 1,
+      at = Math.max(0, Math.min(index, last)),
+      i;
+    for (i = at; i >= 0 && i <= last; i += dir)
+      if (!topButtons[i].hidden) return i;
+    for (i = at; i >= 0 && i <= last; i -= dir)
+      if (!topButtons[i].hidden) return i;
+    return 0;
+  }
   function focusTopButton(index) {
+    var previous = focusedTopButton;
     setFocusZone('top');
     document.body.classList.remove('scrolled');
     setPartState(topButtons[focusedTopButton], 'focused', false);
-    focusedTopButton = Math.max(
-      topButtons[0].hidden ? 1 : 0,
-      Math.min(index, topButtons.length - 1)
-    );
+    focusedTopButton = visibleTopButton(index, index < previous ? -1 : 1);
     setPartState(topButtons[focusedTopButton], 'focused', true);
   }
   function setFocusZone(zone) {
@@ -2352,7 +2363,10 @@
         })()
       : 1 === index
         ? openNetworkSettings()
-        : window.RenewalPanel.open();
+        : 2 === index
+          ? window.RenewalPanel.open()
+          : window.InfoPanel &&
+            (focusTopButton(index), window.InfoPanel.open());
   }
   function addInputSeparator() {
     var separator = document.createElement('div');
@@ -2472,7 +2486,10 @@
   }
   document.addEventListener('keyup', function (event) {
     if (window.RootLauncherRendered !== true) return;
-    if (window.RenewalPanel && window.RenewalPanel.isOpen()) {
+    if (
+      (window.RenewalPanel && window.RenewalPanel.isOpen()) ||
+      (window.InfoPanel && window.InfoPanel.isOpen())
+    ) {
       okPressed = false;
       return;
     }
@@ -2588,7 +2605,7 @@
           focusTopButton(focusedTopButton - 1);
         } else if (39 === key) {
           if (
-            focusedTopButton === 2 &&
+            focusedTopButton === visibleTopButton(topButtons.length - 1, -1) &&
             layoutGeometry.ribbon &&
             layoutGeometry.ribbon.edgeNavigation === 'shortcuts'
           ) {
@@ -2660,6 +2677,16 @@
         activateTopButton(t);
       }
     });
+  });
+  // Leaving mr.redify hides the Info button; do not leave the focus on it.
+  document.addEventListener('ctv-scope', function () {
+    if (
+      topButtons[3].hidden ||
+      (window.HomeInfo && !window.HomeInfo.isMrRedify())
+    ) {
+      if (focusZone === 'top' && focusedTopButton === 3) focusTopButton(2);
+      else setPartState(topButtons[3], 'focused', false);
+    }
   });
   getElement('viewport').addEventListener(
     'wheel',
