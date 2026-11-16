@@ -824,6 +824,9 @@
   font-size: 25px;
   line-height: 1.25;
 }
+.settings-categories button[hidden] {
+  display: none;
+}
 .settings-categories button[aria-selected='true'] {
   background: #242b34;
 }

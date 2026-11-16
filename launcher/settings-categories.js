@@ -40,6 +40,31 @@
     notifications: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
     sound: 'M3 9h4l5-4v14l-5-4H3zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12'
   };
+  var extraPaths = {
+    wallpapers: 'M3 3h18v18H3zM3 16l6-6 5 5 3-3 4 4M16 7h.01',
+    idle: 'M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z',
+    daily: 'M3 5h18v14H3zM3 10h18M8 14h3M14 14h2',
+    calendar: 'M4 5h16v16H4zM4 10h16M8 3v4M16 3v4',
+    football:
+      'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8l3 2-1 3.5h-4L9 10zM12 3v5M15 10l5 1M14 13.5l3 4M10 13.5l-3 4M9 10l-5 1'
+  };
+  var paths_ids = [
+    'home',
+    'appearance',
+    'themes',
+    'language',
+    'updates',
+    'advanced',
+    'developer'
+  ];
+  // Unknown ids fall back to a plain dot so a new tab never yields an undefined path.
+  function iconPath(id) {
+    return (
+      extraPaths[id] ||
+      paths[paths_ids.indexOf(id)] ||
+      'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
+    );
+  }
   function createIcon(shape) {
     var ns = 'http://www.w3.org/2000/svg',
       svg = document.createElementNS(ns, 'svg'),
@@ -114,6 +139,7 @@
       tabs = [],
       panes = [],
       remembered = [],
+      hidden = {},
       current = 0,
       updateTab;
     card.classList.add('settings-workspace');
@@ -155,6 +181,11 @@
       if (list.indexOf(target) < 0) target = list[0];
       if (target) target.focus();
     }
+    function shown() {
+      return tabs.filter(function (tab, i) {
+        return !hidden[groups[i].id];
+      });
+    }
     function select(index) {
       if (current !== index && root.HomeThemePanel)
         HomeThemePanel.activate(false);
@@ -182,23 +213,7 @@
       tab.setAttribute('data-category', group.id);
       tab.id = 'settings-tab-' + group.id;
       tab.setAttribute('aria-controls', 'settings-pane-' + group.id);
-      tab.appendChild(
-        createIcon(
-          group.id === 'wallpapers'
-            ? 'M3 3h18v18H3zM3 16l6-6 5 5 3-3 4 4M16 7h.01'
-            : paths[
-                [
-                  'home',
-                  'appearance',
-                  'themes',
-                  'language',
-                  'updates',
-                  'advanced',
-                  'developer'
-                ].indexOf(group.id)
-              ]
-        )
-      );
+      tab.appendChild(createIcon(iconPath(group.id)));
       var text = document.createElement('span');
       text.textContent = t(group.label);
       tab.appendChild(text);
@@ -280,6 +295,21 @@
     select(0);
     if (weatherReady) weatherReady();
     var view = {
+      setGroupVisible: function (id, visible) {
+        var at = -1;
+        groups.forEach(function (group, i) {
+          if (group.id === id) at = i;
+        });
+        if (at < 0 || !!hidden[id] === !visible) return;
+        hidden[id] = !visible;
+        tabs[at].hidden = !visible;
+        if (!visible && current === at) {
+          var wasFocused = nav.contains(document.activeElement);
+          select(0);
+          if (wasFocused) tabs[0].focus();
+        }
+        scrollHint();
+      },
       panel: panel,
       card: card,
       nav: nav,
@@ -411,9 +441,12 @@
         }
         if (inNav) {
           if (key === 38 || key === 40) {
-            var menu = tabs.concat([footer.querySelector('button')]);
+            var menu = shown().concat([footer.querySelector('button')]);
             menu[
-              (current + (key === 38 ? -1 : 1) + menu.length) % menu.length
+              (menu.indexOf(tabs[current]) +
+                (key === 38 ? -1 : 1) +
+                menu.length) %
+                menu.length
             ].focus();
             return true;
           }
@@ -430,7 +463,7 @@
           return true;
         }
         if (key === 9) {
-          var all = tabs
+          var all = shown()
               .concat(list)
               .concat(
                 Array.prototype.slice.call(footer.querySelectorAll('button'))

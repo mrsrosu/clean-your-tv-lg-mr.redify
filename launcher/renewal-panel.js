@@ -813,6 +813,14 @@
           ]
         }
       ];
+      var scopedTabs = window.HomeInfo ? HomeInfo.tabs() : [];
+      scopedTabs.forEach(function (spec) {
+        var host = document.createElement('div');
+        try {
+          spec.build(host);
+        } catch (_) {}
+        groups.push({ id: spec.id, label: spec.label, elements: [host] });
+      });
       if (developerMode)
         groups.push({
           id: 'developer',
@@ -820,6 +828,15 @@
           elements: [developerEntry.parentNode]
         });
       categories = SettingsCategories.attach(panel, main, groups);
+      if (scopedTabs.length) {
+        var applyScope = function () {
+          scopedTabs.forEach(function (spec) {
+            categories.setGroupVisible(spec.id, HomeInfo.isMrRedify());
+          });
+        };
+        applyScope();
+        HomeInfo.onScopeChange(applyScope);
+      }
     }
     window.RenewalPanel = {
       isOpen: openNow,
