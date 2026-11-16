@@ -281,6 +281,27 @@ const assert = require('node:assert/strict'),
     localStorage.removeItem('tvhome.language');
     HomeI18n.refresh();
   });
+  // 7. M9: a one-off event on 29 February lands in the next leap year, so it can appear in the grid.
+  await setup('2026-11-16T12:00:00');
+  await page.evaluate(() => RenewalPanel.open());
+  await page.locator('[data-category="calendar"]').click();
+  const pane7 = page.locator('#settings-pane-calendar');
+  const val = (n) => pane7.locator('.cal-value').nth(n).innerText();
+  for (let i = 0; i < 12 && !/^Feb/.test(await val(1)); i++)
+    await pane7.locator('.cal-month-up').click();
+  for (let i = 0; i < 31 && (await val(0)).trim() !== '29'; i++)
+    await pane7.locator('.cal-day-up').click();
+  assert.match(await val(1), /^Feb/);
+  assert.equal((await val(0)).trim(), '29');
+  await pane7.locator('.cal-title-input').fill('Leap');
+  if ((await pane7.locator('.cal-yearly').getAttribute('aria-pressed')) === 'true')
+    await pane7.locator('.cal-yearly').click(); // off
+  await pane7.locator('.cal-add').click();
+  const leap = await page.evaluate(() => HomeInfo.calendar.get().events);
+  assert.equal(leap.length, 1);
+  assert.deepEqual([leap[0].day, leap[0].month, leap[0].year], [29, 2, 2028]);
+  await page.evaluate(() => document.getElementById('renewalClose').click());
+
   assert.deepEqual(home.errors, [], 'page errors');
   await home.close();
   console.log('PASS calendar-ui');

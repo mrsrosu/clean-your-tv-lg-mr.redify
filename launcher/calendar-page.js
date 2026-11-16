@@ -611,6 +611,9 @@
           form.month < base.month ||
           (form.month === base.month && form.day < base.day);
         item.year = base.year + (passed ? 1 : 0);
+        // 29 February exists only in leap years: use the next one, so the event can ever show.
+        while (form.month === 2 && form.day === 29 && daysIn(item.year, 2) < 29)
+          item.year++;
       }
       calendar.set({ events: events.concat([item]) });
       input.value = '';
