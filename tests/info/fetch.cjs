@@ -49,6 +49,19 @@ test('fresh cache returns without calling loader', async () => {
   assert.equal(calls, 0);
   assert.deepEqual(r, { value: { a: 1 }, fetchedAt: 1000, stale: false });
 });
+test('an entry written with a future fetchedAt is stale: loader is called (M6)', async () => {
+  const mem = memory(),
+    f = context(mem).HomeInfoFetch;
+  seed(mem, 'future', 5000);
+  let calls = 0;
+  const r = await f.cached('k', 500, () => (calls++, Promise.resolve('new')), { now: () => 1000 });
+  assert.equal(calls, 1, 'clock went backwards: not fresh');
+  assert.deepEqual(r, { value: 'new', fetchedAt: 1000, stale: false });
+  // The loader failing keeps the future entry as the stale fallback.
+  seed(mem, 'future', 5000);
+  const r2 = await f.cached('k', 500, () => Promise.reject(new Error('x')), { now: () => 1000 });
+  assert.deepEqual(r2, { value: 'future', fetchedAt: 5000, stale: true });
+});
 test('expired cache calls loader and stores the new value', async () => {
   const mem = memory(),
     f = context(mem).HomeInfoFetch;

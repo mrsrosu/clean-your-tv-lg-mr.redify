@@ -13,13 +13,13 @@ A small fork of [Clean Your TV for LG webOS](https://github.com/Razdva122/clean-
 
 These appear **only while mr.redify is selected**; Classic and every other theme show none of them. Settings has four new tabs (visible with mr.redify): **Idle screen**, **Rates & holidays**, **Calendar** and **Football**.
 
-- **Idle screen**: after a period without input Home shows a full-screen overlay: big clock with date and weather, or an info panel. Choose the style and the timeout (off, 5, 10 or 30 minutes; default 10) in the Idle screen tab. The image is dimmed and moves slowly to protect OLED panels; any key closes it.
+- **Idle screen**: after a period without input Home shows a full-screen overlay: big clock with date and weather, or an info panel. Choose the style and the timeout (off, 5, 10 or 30 minutes; default 10) in the Idle screen tab. The image is dimmed and moves slowly to protect OLED panels; any key closes it. It never starts while Settings is open or while another app is in front, and an info page left open past the timeout is closed first.
 - **Calendar**: month view with Romanian public holidays (including the movable Orthodox Easter dates) and name days, plus your own events, stored on the TV.
 - **Exchange rates**: official BNR (National Bank of Romania) rates for the currencies you pick in Rates & holidays.
-- **Football**: fixtures, results and standings for the leagues and teams you follow, taken from ESPN (Romanian Liga 1 from TheSportsDB).
+- **Football**: fixtures, results and live scores (no standings) for the leagues and teams you follow, taken from ESPN (Romanian Liga 1 from TheSportsDB).
 - **Romanian**: Romanian is added to the UI languages.
 
-**BNR rates need the Home Helper updated.** Reinstall it with `./install.sh <TV IP>`; until then the rates page shows "service update required". Rates are not available in the Root edition.
+**BNR rates need the Home Helper updated.** Reinstall it with `./install.sh <TV IP>`; until then the rates page shows "service update required". The info features are not available in the Root edition (they stay off there even with mr.redify).
 
 Data sources and limits:
 

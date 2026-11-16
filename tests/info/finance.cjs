@@ -229,6 +229,15 @@ test('transport: unknown method / service errors => update-required, never throw
   assert.equal((await root.HomeInfoFinance.refresh()).state, 'update-required');
   assert.equal(root.calls.length, 0, 'Root has no bnrRates: no call');
 });
+test('transport: transient bnr-* codes (busy, timeout) => offline, not update-required', async () => {
+  for (const code of ['bnr-busy', 'bnr-timeout', 'bnr-http-status']) {
+    const ctx = bridgeContext(
+      memory(),
+      JSON.stringify({ returnValue: false, errorCode: code })
+    );
+    assert.equal((await ctx.HomeInfoFinance.refresh()).state, 'offline', code);
+  }
+});
 test('transport: network errors => offline; cache shows as stale', async () => {
   const mem = memory(),
     err = JSON.stringify({

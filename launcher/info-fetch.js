@@ -60,7 +60,9 @@
   function cached(key, ttlMs, loader, opts) {
     const now = (opts && opts.now) || Date.now,
       entry = readEntry(key);
-    if (entry && now() - entry.fetchedAt < ttlMs)
+    // A fetchedAt in the future (TV clock was wrong when it was written) is not fresh.
+    const age = entry ? now() - entry.fetchedAt : -1;
+    if (entry && age >= 0 && age < ttlMs)
       return Promise.resolve({ value: entry.value, fetchedAt: entry.fetchedAt, stale: false });
     if (inflight[key]) return inflight[key];
     let started;

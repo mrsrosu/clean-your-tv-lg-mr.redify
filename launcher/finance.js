@@ -185,8 +185,9 @@
             } else if (
               reply &&
               typeof reply.errorCode === 'string' &&
-              /^bnr-(?!busy)/.test(reply.errorCode)
+              /^bnr-/.test(reply.errorCode)
             )
+              // Transient (bnr-busy, timeout, network, ...): offline, not "service update required".
               finish(new Error(reply.errorCode));
             else finish(new Error('service')); // unknown method, not authorized, invalid request
           } catch (_) {
