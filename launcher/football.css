@@ -94,3 +94,24 @@
   font-size: 22px;
   opacity: 0.85;
 }
+.fb-logo {
+  flex-shrink: 0;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.fb-page .fb-team-name .fb-logo,
+.fb-page .fb-home .fb-logo {
+  margin: 0 12px 0 0;
+}
+.fb-page .fb-home .fb-logo {
+  margin: 0 0 0 12px;
+}
+.fb-page .fb-away .fb-logo {
+  margin: 0 12px 0 0;
+}
+.fb-page .fb-text .fb-logo {
+  margin: 0 12px;
+}
+.fb-tab .fb-chip .fb-logo {
+  margin: 0 8px 0 0;
+}

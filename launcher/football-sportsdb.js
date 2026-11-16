@@ -53,6 +53,16 @@
     iso = d + 'T' + (tm.length === 5 ? tm + ':00' : tm) + 'Z';
     return isNaN(Date.parse(iso)) ? '' : iso;
   }
+  // strHomeTeamBadge / strAwayTeamBadge come with the round payload (no extra request); '' unless an allowed host.
+  function badge(v) {
+    return root.HomeInfoFetch && root.HomeInfoFetch.logoUrl
+      ? root.HomeInfoFetch.logoUrl(v)
+      : '';
+  }
+  function withLogo(target, logo) {
+    if (logo) target.logo = logo;
+    return target;
+  }
   function parseEvent(e, competition) {
     e = obj(e);
     if (!e) return null;
@@ -67,16 +77,22 @@
     return {
       id: id,
       competition: competition,
-      home: {
-        id: hid,
-        name: hn,
-        score: state === 'pre' ? null : score(e.intHomeScore)
-      },
-      away: {
-        id: aid,
-        name: an,
-        score: state === 'pre' ? null : score(e.intAwayScore)
-      },
+      home: withLogo(
+        {
+          id: hid,
+          name: hn,
+          score: state === 'pre' ? null : score(e.intHomeScore)
+        },
+        badge(e.strHomeTeamBadge)
+      ),
+      away: withLogo(
+        {
+          id: aid,
+          name: an,
+          score: state === 'pre' ? null : score(e.intAwayScore)
+        },
+        badge(e.strAwayTeamBadge)
+      ),
       start: start,
       state: state,
       clock: state === 'in' ? str(e.strProgress) || str(e.strStatus) : ''
@@ -235,7 +251,7 @@
           [m.home, m.away].forEach(function (s) {
             if (!seen[s.id]) {
               seen[s.id] = true;
-              out.push({ id: s.id, name: s.name });
+              out.push(withLogo({ id: s.id, name: s.name }, s.logo));
             }
           });
         });

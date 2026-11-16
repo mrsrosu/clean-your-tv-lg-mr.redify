@@ -527,8 +527,18 @@ test('sportsdb scoreboard: the two matchdays around now, Match shape, UTC start'
   assert.deepEqual(done, {
     id: '2503054',
     competition: 'rou.1',
-    home: { id: '138191', name: 'Botoșani', score: 1 },
-    away: { id: '135929', name: 'Oțelul Galați', score: 1 },
+    home: {
+      id: '138191',
+      name: 'Botoșani',
+      score: 1,
+      logo: 'https://r2.thesportsdb.com/images/media/team/badge/1volx41719994247.png'
+    },
+    away: {
+      id: '135929',
+      name: 'Oțelul Galați',
+      score: 1,
+      logo: 'https://r2.thesportsdb.com/images/media/team/badge/cfkqt61770049560.png'
+    },
     start: '2026-11-09T18:00:00Z',
     state: 'post',
     clock: ''
@@ -740,6 +750,69 @@ test('refresh rou.1: SportsDB failing -> cached values, offline; ESPN competitio
   const r = await ctx.HomeFootball.refresh();
   assert.equal(r.state, 'offline');
   assert.equal(ctx.HomeFootball.idleLines().length, 2, 'cached lines kept');
+});
+test('logos: ESPN team.logo / logos[0].href normalised, only allowed https hosts, key absent otherwise', async () => {
+  const p = JSON.parse(fx('scoreboard')),
+    comps = p.events.map((e) => e.competitions[0].competitors);
+  comps[0][0].team.logo = 'https://a.espncdn.com/i/teamlogos/soccer/500/1.png';
+  comps[0][1].team.logos = [{ href: 'https://a1.espncdn.com/i/teamlogos/soccer/500/2.png' }];
+  comps[1][0].team.logo = 'http://a.espncdn.com/i/teamlogos/soccer/500/3.png'; // not https
+  comps[1][1].team.logo = 'https://evil.example/x.png'; // other host
+  comps[2][0].team.logo = 'https://a.espncdn.com.evil.example/x.png'; // look-alike host
+  comps[2][1].team.logos = [{ href: 'javascript:alert(1)' }];
+  comps[3][0].team.logo = 'https://a.espncdn.com@evil.example/x.png'; // userinfo trick
+  comps[3][1].team.logo = 'https://a.espncdn.com/x.png"onerror="1'; // quote
+  const ctx = context(memory(), { [BASE + 'eng.1/scoreboard']: JSON.stringify(p) }),
+    list = await ctx.FootballEspn.scoreboard('eng.1'),
+    sides = [].concat(...list.map((m) => [m.home, m.away]));
+  assert.equal(list[0].home.logo, 'https://a.espncdn.com/i/teamlogos/soccer/500/1.png');
+  assert.equal(list[0].away.logo, 'https://a1.espncdn.com/i/teamlogos/soccer/500/2.png');
+  sides.slice(2).forEach((x) => assert.equal('logo' in x, false, 'dropped: ' + x.name));
+  const t = JSON.parse(fx('teams'));
+  t.sports[0].leagues[0].teams[0].team.logos = [
+    { href: 'https://a.espncdn.com/i/teamlogos/soccer/500/9.png' }
+  ];
+  const ctx2 = context(memory(), { [BASE + 'eng.1/teams']: JSON.stringify(t) }),
+    teams = await ctx2.FootballEspn.teams('eng.1'),
+    withLogo = teams.filter((x) => x.logo);
+  assert.equal(withLogo.length, 1);
+  assert.equal(withLogo[0].logo, 'https://a.espncdn.com/i/teamlogos/soccer/500/9.png');
+  teams.filter((x) => !x.logo).forEach((x) => assert.equal('logo' in x, false));
+});
+test('logos: SportsDB badges come with the round payload (no extra request); bad host dropped', async () => {
+  const routes = sdbRoutes(),
+    key = Object.keys(routes).find((k) => /eventsround/.test(k) && /r=15/.test(k)),
+    p = JSON.parse(routes[key]);
+  p.events[0].strHomeTeamBadge = 'https://evil.example/badge.png';
+  p.events[0].strAwayTeamBadge = null;
+  routes[key] = JSON.stringify(p);
+  const ctx = context(memory(), routes),
+    list = await ctx.FootballSportsDb.scoreboard('rou.1'),
+    base = context(memory(), sdbRoutes());
+  await base.FootballSportsDb.scoreboard('rou.1');
+  assert.equal(ctx.requests.length, base.requests.length, 'no request for logos');
+  const bad = list.find((m) => m.id === String(p.events[0].idEvent));
+  assert.equal('logo' in bad.home, false);
+  assert.equal('logo' in bad.away, false);
+  const ok = list.find((m) => m.id === '2503054');
+  assert.match(ok.home.logo, /^https:\/\/r2\.thesportsdb\.com\/images\/media\/team\/badge\//);
+  const names = await ctx.FootballSportsDb.teams('rou.1');
+  assert.ok(names.some((x) => x.logo), 'team list items carry the logo');
+});
+test('logos: HomeInfoFetch.logoUrl host list', () => {
+  const ctx = context(memory(), {}),
+    f = ctx.HomeInfoFetch.logoUrl;
+  [
+    'https://a.espncdn.com/i/x.png',
+    'https://a1.espncdn.com/i/x.png',
+    'https://www.thesportsdb.com/images/x.png',
+    'https://r2.thesportsdb.com/images/x.png/tiny'
+  ].forEach((u) => assert.equal(f(u), u));
+  [
+    '', null, 5, 'http://a.espncdn.com/x.png', 'https://espncdn.com/x.png', 'https://b.espncdn.com/x.png',
+    'https://a.espncdn.com:8443/x.png', '//a.espncdn.com/x.png', 'data:image/png;base64,AA==',
+    'https://a.espncdn.com/' + 'x'.repeat(300)
+  ].forEach((u) => assert.equal(f(u), '', String(u)));
 });
 (async () => {
   for (const [name, fn] of tests) {

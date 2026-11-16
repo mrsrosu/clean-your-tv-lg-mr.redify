@@ -3,7 +3,7 @@
  * scoreboard(competition)             today's / current matchday matches
  * teams(competition)                  teams of the competition (for the Settings picker)
  * teamMatches(competition, teamId)    played matches (schedule) plus upcoming ones (schedule?fixture=true)
- * Every answer is normalised to Match { id, competition, home:{id,name,score}, away:{id,name,score}, start (ISO),
+ * Every answer is normalised to Match { id, competition, home:{id,name,score,logo?}, away:{id,name,score,logo?}, start (ISO),
  * state 'pre'|'in'|'post', clock }. A payload of another shape yields [] (no exception); network errors reject.
  * No standings anywhere.
  */
@@ -42,6 +42,15 @@
     n = typeof n === 'string' && n !== '' ? Number(n) : n;
     return typeof n === 'number' && isFinite(n) && n >= 0 ? n : null;
   }
+  // team.logo (scoreboard) or team.logos[0].href (team lists, schedules); '' when absent or not an allowed host.
+  function logoOf(team) {
+    var check = root.HomeInfoFetch && root.HomeInfoFetch.logoUrl;
+    if (!check) return '';
+    var url = check(team.logo);
+    if (!url && Array.isArray(team.logos) && obj(team.logos[0]))
+      url = check(team.logos[0].href);
+    return url;
+  }
   function side(list, which) {
     for (var i = 0; i < list.length; i++) {
       var c = obj(list[i]),
@@ -52,10 +61,16 @@
             str(team.displayName) ||
             str(team.shortDisplayName) ||
             str(team.name);
-        if (id && name) return { id: id, name: name, score: c.score };
+        if (id && name)
+          return { id: id, name: name, score: c.score, logo: logoOf(team) };
       }
     }
     return null;
+  }
+  // The logo key exists only when there is one (an answer without logos keeps its old shape).
+  function withLogo(target, logo) {
+    if (logo) target.logo = logo;
+    return target;
   }
   function parseEvent(e, competition) {
     e = obj(e);
@@ -79,16 +94,22 @@
     return {
       id: id,
       competition: competition,
-      home: {
-        id: home.id,
-        name: home.name,
-        score: state === 'pre' ? null : score(home.score)
-      },
-      away: {
-        id: away.id,
-        name: away.name,
-        score: state === 'pre' ? null : score(away.score)
-      },
+      home: withLogo(
+        {
+          id: home.id,
+          name: home.name,
+          score: state === 'pre' ? null : score(home.score)
+        },
+        home.logo
+      ),
+      away: withLogo(
+        {
+          id: away.id,
+          name: away.name,
+          score: state === 'pre' ? null : score(away.score)
+        },
+        away.logo
+      ),
       start: start,
       state: state,
       clock:
@@ -123,7 +144,7 @@
         name = team ? str(team.displayName) || str(team.name) : '';
       if (id && name && !seen[id]) {
         seen[id] = true;
-        out.push({ id: id, name: name });
+        out.push(withLogo({ id: id, name: name }, logoOf(team)));
       }
     }
     return out.sort(function (a, b) {

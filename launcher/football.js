@@ -512,6 +512,62 @@
     });
   }
 
+  // ---- team logos ----
+  // At most this many <img> per render of the page / tab (the old engine decodes them all on the main thread).
+  var MAX_LOGOS = 40,
+    logosLeft = MAX_LOGOS;
+  function resetLogos() {
+    logosLeft = MAX_LOGOS;
+  }
+  // TheSportsDB serves smaller renditions with a size suffix; if that URL fails the plain one is tried once.
+  function sized(url) {
+    return /^https:\/\/(www|r2)\.thesportsdb\.com\//.test(url) &&
+      !/\/(tiny|small|medium|large)$/.test(url)
+      ? url + '/tiny'
+      : url;
+  }
+  // <img> for a logo URL, or null (invalid / not an allowed host / budget used up). Explicit size, no alt text; a
+  // broken image removes itself (no broken-image icon). The URL is re-validated here: cached data is not trusted.
+  function logoNode(url, size, counted) {
+    var check = root.HomeInfoFetch && root.HomeInfoFetch.logoUrl,
+      safeUrl = check ? check(url) : '';
+    if (!safeUrl || !doc || !doc.createElement) return null;
+    if (counted) {
+      if (logosLeft <= 0) return null;
+      logosLeft--;
+    }
+    var img = doc.createElement('img'),
+      first = sized(safeUrl),
+      retried = false;
+    img.className = 'fb-logo';
+    img.alt = '';
+    img.width = size;
+    img.height = size;
+    img.onerror = function () {
+      if (!retried && first !== safeUrl) {
+        retried = true;
+        img.src = safeUrl;
+        return;
+      }
+      img.onerror = null;
+      if (img.parentNode) img.parentNode.removeChild(img);
+    };
+    img.src = first;
+    return img;
+  }
+  // Logo of a team id seen in a match (home or away side), '' when none.
+  function logoIn(match, teamId) {
+    if (!match) return '';
+    if (match.home && match.home.id === teamId) return match.home.logo || '';
+    if (match.away && match.away.id === teamId) return match.away.logo || '';
+    return '';
+  }
+  function logoOfStatus(st, teamId) {
+    return (
+      logoIn(st.live, teamId) || logoIn(st.next, teamId) || logoIn(st.last, teamId)
+    );
+  }
+
   // ---- page ----
   function el(tag, cls, text) {
     var e = doc.createElement(tag);
@@ -552,6 +608,7 @@
       now = clock(),
       status = statusText(last);
     host.innerHTML = '';
+    resetLogos();
     host.appendChild(el('div', 'fb-title', t('Football')));
     if (!s.competitions.length && !s.teams.length) {
       host.appendChild(el('div', 'fb-empty', t('Choose teams in Settings')));
@@ -563,7 +620,11 @@
       statuses(snap, now.toISOString()).forEach(function (x) {
         var box = el('div', 'fb-team'),
           st = x.status;
-        box.appendChild(el('div', 'fb-team-name', x.team.name));
+        var head = el('div', 'fb-team-name'),
+          headLogo = logoNode(logoOfStatus(st, x.team.id), 28, true);
+        if (headLogo) head.appendChild(headLogo);
+        head.appendChild(doc.createTextNode(x.team.name));
+        box.appendChild(head);
         if (st.live)
           line(
             box,
@@ -571,7 +632,7 @@
             t('Live') + (st.live.clock ? ' ' + clockText(st.live.clock) : ''),
             scoreText(st.live)
           );
-        if (st.next)
+        if (st.next) {
           line(
             box,
             'fb-next',
@@ -582,6 +643,13 @@
               ' ' +
               timeOf(st.next.start)
           );
+          // The next match gets the big logos (about 40 px) around its text.
+          var nextText = box.lastChild.lastChild,
+            lh = logoNode(st.next.home.logo, 40, true),
+            la = logoNode(st.next.away.logo, 40, true);
+          if (lh) nextText.insertBefore(lh, nextText.firstChild);
+          if (la) nextText.appendChild(la);
+        }
         if (st.last)
           line(
             box,
@@ -626,7 +694,13 @@
                   : t('FT')
             )
           );
-          row.appendChild(el('span', 'fb-home', m.home.name));
+          var homeCell = el('span', 'fb-home', m.home.name),
+            awayCell = el('span', 'fb-away', m.away.name),
+            hl = logoNode(m.home.logo, 28, true),
+            al = logoNode(m.away.logo, 28, true);
+          if (hl) homeCell.appendChild(hl);
+          if (al) awayCell.insertBefore(al, awayCell.firstChild);
+          row.appendChild(homeCell);
           row.appendChild(
             el(
               'span',
@@ -638,7 +712,7 @@
                     (m.away.score === null ? '?' : m.away.score)
             )
           );
-          row.appendChild(el('span', 'fb-away', m.away.name));
+          row.appendChild(awayCell);
           group.appendChild(row);
         });
         today.appendChild(group);
@@ -735,6 +809,18 @@
       pane.appendChild(box);
       return box;
     }
+    // A followed team's logo: from the loaded team list, else from its matches in the snapshot.
+    function followedLogo(team) {
+      var list = loaded[team.competition] || [],
+        i,
+        url = '';
+      for (i = 0; i < list.length; i++)
+        if (list[i].id === team.id) url = list[i].logo || '';
+      if (url) return url;
+      var ms_ = matchesOf(readSnap(), team);
+      for (i = 0; i < ms_.length && !url; i++) url = logoIn(ms_[i], team.id);
+      return url;
+    }
     function setTeams(next, focusKey) {
       store.set({ teams: next });
       draw(focusKey);
@@ -756,6 +842,7 @@
         return b;
       }
       pane.innerHTML = '';
+      resetLogos();
       var lp = section(t('Show on main page')),
         lb = mark(
           button('fb-chip fb-landing', s.landing ? t('On') : t('Off')),
@@ -797,6 +884,8 @@
           button('fb-chip fb-followed selected', x.name + ' ✕'),
           'f:' + teamKey(x)
         );
+        var fl = logoNode(followedLogo(x), 24, true);
+        if (fl) b.insertBefore(fl, b.firstChild);
         b.setAttribute('aria-label', t('Remove') + ' ' + x.name);
         b.setAttribute('aria-pressed', 'true');
         b.onclick = function () {
@@ -827,6 +916,8 @@
               button('fb-chip fb-team-chip', team.name),
               't:' + teamKey(mine)
             );
+            var tl = logoNode(team.logo, 24, true);
+            if (tl) b.insertBefore(tl, b.firstChild);
             pressed(b, false);
             b.onclick = function () {
               var now = store.get().teams;
@@ -873,6 +964,9 @@
     refresh: refresh,
     idleLines: idleLines,
     landingItems: landingItems,
+    logoNode: function (url, size) {
+      return logoNode(url, size, false);
+    },
     clockText: clockText,
     setClock: function (fn) {
       clock = fn;

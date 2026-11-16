@@ -87,5 +87,18 @@
     inflight[key] = promise;
     return promise;
   }
-  root.HomeInfoFetch = { http: http, cached: cached };
+  // Team logos: only https URLs on the hosts of the two football providers; anything else is dropped (''). The URL
+  // string is all that is ever stored; images are never cached by us.
+  const LOGO_HOSTS = [
+    'a.espncdn.com',
+    'a1.espncdn.com',
+    'www.thesportsdb.com',
+    'r2.thesportsdb.com'
+  ];
+  function logoUrl(value) {
+    if (typeof value !== 'string' || value.length > 300) return '';
+    const m = /^https:\/\/([a-z0-9.-]+)\/[^\s"'<>\\]*$/.exec(value);
+    return m && LOGO_HOSTS.indexOf(m[1]) >= 0 ? value : '';
+  }
+  root.HomeInfoFetch = { http: http, cached: cached, logoUrl: logoUrl };
 })(window);
