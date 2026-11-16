@@ -25,14 +25,13 @@
   if (!doc || !info || !info.onChange || !info.isMrRedify) return;
   var HOUR = 3600000,
     MINUTE = 60000,
-    RIGHT = 1808, // right edge of the header buttons and of the cards
-    CARDS_W = 500, // the free width right of the weather block (x 772 to 1808) is shared by the grid and the cards
-    GRID_W = 490,
-    COL_GAP = 22, // between the grid and the cards
-    WEATHER_GAP = 24, // between the weather block and the grid
+    RIGHT = 1808, // right edge of the header buttons and of the third column
+    LEFT = 112, // left edge of the weather block (the first column)
+    GAP = 24, // between the three equal columns (the exact gap is spread so the right edge is RIGHT)
     BUTTONS_GAP = 20, // under the header buttons
-    BOTTOM_GAP = 20, // above the app name / dock
+    DOCK_GAP = 24, // above the dock
     SCREEN_GAP = 40, // above the bottom edge when nothing else limits
+    SIZES = [34, 32, 30, 28, 26, 24, 22], // body text sizes tried from the weather's own 34 px downwards
     ICONS = {
       calendar:
         'M17,12h-5v5h5V12zM16,1v2H8V1H6v2H5C3.89,3 3.01,3.9 3.01,5L3,19c0,1.1 0.89,2 2,2h14c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2h-1V1H16zM19,19H5V8h14V19z',
@@ -219,29 +218,30 @@
     var m = /scale\(([\d.]+)\)/.exec(node.style.transform || '');
     return m ? parseFloat(m[1]) : 1;
   }
-  // The room: columns start at the weather block's top (clock row bottom + 26); the weather block's right edge limits
-  // the grid; the header buttons and the app name / dock limit from above and below.
+  // The room: the three columns start at the weather block's top, end above the dock; the header buttons limit the
+  // third column from above; the weather block's right edge limits the grid column. The app name is hidden with
+  // mr.redify, so it limits nothing.
   function bounds() {
     var surface = doc.getElementById('homeSurface'),
       buttons = doc.getElementById('topButtons'),
       timeRow = doc.getElementById('timeRow'),
       weather = doc.getElementById('homeWeather'),
-      hero = doc.getElementById('hero'),
       dock = doc.getElementById('dockBand'),
       top = 200,
       bottom = (surface ? surface.offsetHeight : 1080) - SCREEN_GAP,
-      b = { buttons: null, weatherRight: 0 },
+      b = { buttons: null, weatherRight: 0, weather: null },
       p,
       v;
     if (timeRow) {
       p = at(timeRow, surface);
-      top = p.top + timeRow.offsetHeight + 26;
+      top = p.top + timeRow.offsetHeight + 20;
     }
     if (weather && !weather.hidden && weather.style.top) {
       v = parseFloat(weather.style.top);
       if (v === v) top = v;
       p = at(weather, surface);
       b.weatherRight = p.left + weather.offsetWidth * scaleOf(weather);
+      b.weather = weather;
     }
     if (buttons) {
       p = at(buttons, surface);
@@ -250,18 +250,19 @@
         bottom: p.top + buttons.offsetHeight + BUTTONS_GAP
       };
     }
-    // The app name keeps its row even while faded out; only a name with text and a position limits the stack.
-    if (hero && hero.textContent) {
-      v = parseFloat(hero.style.top);
-      if (v === v) bottom = Math.min(bottom, v - BOTTOM_GAP);
-    }
     if (dock) {
       v = parseFloat(dock.style.top);
-      if (v === v) bottom = Math.min(bottom, v - BOTTOM_GAP);
+      if (v === v) bottom = Math.min(bottom, v - DOCK_GAP);
     }
     b.top = top;
     b.bottom = bottom;
     return b;
+  }
+  // Column width and the left edges of the three equal columns.
+  function columns() {
+    var w = Math.floor((RIGHT - LEFT - 2 * GAP) / 3),
+      gap = (RIGHT - LEFT - 3 * w) / 2;
+    return { width: w, left: [LEFT, LEFT + w + gap, RIGHT - w] };
   }
   function place(node, left, width, b) {
     // Under the header buttons where the column would touch them.
@@ -289,21 +290,96 @@
     if (node) return stack.removeChild(node);
     return stack.removeChild(stack.lastChild);
   }
+  function overflows(node) {
+    return node.scrollHeight > node.clientHeight + 1;
+  }
+  // The largest text size at which the stack's equal sections (and the grid) hold their content without clipping; 0
+  // when even the smallest does not fit.
+  function fitStack(stack, height) {
+    var cards = stack.children,
+      each = Math.floor(height / cards.length),
+      i,
+      k,
+      bad;
+    if (!(each >= 60)) return 0; // not even a title and one line
+    stack.style.height = each * cards.length + 'px';
+    for (i = 0; i < cards.length; i++) cards[i].style.height = each + 'px';
+    for (k = 0; k < SIZES.length; k++) {
+      stack.style.fontSize = SIZES[k] + 'px';
+      bad = false;
+      for (i = 0; i < cards.length && !bad; i++) bad = overflows(cards[i]);
+      if (!bad) return SIZES[k];
+    }
+    return 0;
+  }
+  function fitGrid(grid, height, max) {
+    var k;
+    if (!(height >= 120)) return 0;
+    grid.style.height = height + 'px';
+    for (k = 0; k < SIZES.length; k++) {
+      if (SIZES[k] > max) continue;
+      grid.style.fontSize = SIZES[k] + 'px';
+      if (!overflows(grid)) return SIZES[k];
+    }
+    return 0;
+  }
+  // Top of the first text line of an element (not of its box).
+  function firstTextTop(node) {
+    var walker = doc.createTreeWalker(node, 4, null, false),
+      t,
+      r;
+    while ((t = walker.nextNode())) {
+      if (!/\S/.test(t.nodeValue)) continue;
+      r = doc.createRange();
+      r.selectNodeContents(t);
+      r = r.getBoundingClientRect();
+      if (r.height) return r.top;
+    }
+    return null;
+  }
+  // Moves a placed column so that its first text line starts at y (page coordinates, same scale as Home).
+  function alignFirstText(node, y) {
+    var now = firstTextTop(node);
+    if (y === null || now === null) return;
+    node.style.top = parseFloat(node.style.top) + (y - now) + 'px';
+  }
+  function weatherHeight(b, bottom) {
+    var w = b.weather;
+    if (!w) return;
+    // The weather block is as tall as the other columns (its content stays at the top); weather.js re-applies this
+    // after each of its own renders, without counting it in its reserved region.
+    var h = Math.max(0, bottom - parseFloat(w.style.top)) / scaleOf(w);
+    w.setAttribute('data-lw-height', String(Math.round(h)));
+    w.style.minHeight = Math.round(h) + 'px';
+  }
+  function clearWeatherHeight() {
+    var w = doc.getElementById('homeWeather');
+    if (!w || !w.hasAttribute('data-lw-height')) return;
+    w.removeAttribute('data-lw-height');
+    w.style.minHeight = '';
+  }
   function layout(parts) {
     var b = bounds(),
+      c = columns(),
       grid = parts.grid,
       stack = parts.stack,
-      room,
-      top;
-    var dropped = false;
-    function fits(node, t) {
-      return node.offsetHeight <= b.bottom - t;
-    }
+      dropped = false,
+      top,
+      size = 34,
+      bottom = b.bottom;
+    // The three columns start on one line: the weather block's first visible text is the reference.
+    var lineY = b.weather ? firstTextTop(b.weather) : null;
+    // The third column cannot start above the header buttons: then every column starts below them.
+    if (lineY !== null && b.buttons) lineY = Math.max(lineY, b.buttons.bottom);
     if (stack) {
-      top = place(stack, RIGHT - CARDS_W, CARDS_W, b);
-      // Until the stack ends above the limit: the Exchange card goes first, then Name day, then Football's second item,
-      // then Football (Football has priority over the others, as far as the geometry allows).
-      while (stack.children.length && !fits(stack, top)) {
+      top = place(stack, c.left[2], c.width, b);
+      alignFirstText(stack, lineY);
+      top = parseFloat(stack.style.top);
+      // Equal sections that fill the column; until they fit: Exchange goes first, then Name day, then Football's second
+      // event, then Football (Football has priority over the others, as far as the geometry allows).
+      while (stack.children.length) {
+        size = fitStack(stack, bottom - top);
+        if (size) break;
         dropOne(stack);
         dropped = true;
       }
@@ -313,25 +389,28 @@
       }
     }
     if (grid) {
-      var right = stack ? RIGHT - CARDS_W - COL_GAP : RIGHT,
-        left = right - GRID_W;
+      var left = c.left[1];
       // Never over the weather block: first give up the cards column (the grid moves right), then the grid.
-      if (b.weatherRight && left < b.weatherRight + WEATHER_GAP && stack) {
+      if (b.weatherRight && left < b.weatherRight + GAP && stack) {
         host.removeChild(stack);
         stack = null;
         dropped = true;
-        left = RIGHT - GRID_W;
+        left = c.left[2];
       }
-      top = place(grid, left, GRID_W, b);
+      top = place(grid, left, c.width, b);
+      alignFirstText(grid, lineY);
+      top = parseFloat(grid.style.top);
       if (
-        (b.weatherRight && left < b.weatherRight + WEATHER_GAP) ||
-        !fits(grid, top)
+        (b.weatherRight && left < b.weatherRight + GAP) ||
+        !fitGrid(grid, bottom - top, 34)
       ) {
         host.removeChild(grid);
         dropped = true;
       }
     }
     host.hidden = host.children.length === 0;
+    if (host.hidden) clearWeatherHeight();
+    else weatherHeight(b, bottom);
     return dropped;
   }
 
@@ -352,7 +431,10 @@
     if (!host) return;
     host.innerHTML = '';
     host.hidden = true;
-    if (!active()) return;
+    if (!active()) {
+      clearWeatherHeight();
+      return;
+    }
     // Full cards first; if something has to go, the compact cards (one line each); then whole cards are dropped.
     for (var level = 0; level <= 1; level++) {
       host.innerHTML = '';

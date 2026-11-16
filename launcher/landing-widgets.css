@@ -1,5 +1,7 @@
-/* Main-page widgets (landing-widgets.js), mr.redify only: month grid and cards in the theme's glass look. The host
-   is a zero-size anchor; JS places the grid and the stack in Home's coordinates. */
+/* Main-page widgets (landing-widgets.js), mr.redify only: three equal columns (weather | month grid | cards) as plain
+   text over the wallpaper, exactly like the weather block: no box, no background, no border, no shadow, no blur, the
+   weather's own white text. Thin 1 px rules (the weather block's .weather-rule look) separate the stacked sections.
+   JS places the grid and the stack in Home's coordinates and sets their font sizes (em below) and heights. */
 #landingWidgets {
   position: absolute;
   top: 0;
@@ -8,6 +10,9 @@
   height: 0;
   z-index: 3;
   pointer-events: none;
+  font-family: inherit;
+  color: #fff;
+  font-weight: 400;
 }
 #landingWidgets[hidden] {
   display: none;
@@ -19,44 +24,43 @@ body.idle-active #landingWidgets,
 #infoPanel:not([hidden]) ~ #landingWidgets {
   visibility: hidden;
 }
+#landingWidgets * {
+  box-sizing: border-box;
+}
 #landingWidgets .lw-grid,
 #landingWidgets .lw-stack {
   position: absolute;
+  overflow: hidden;
+  line-height: 1.2;
 }
 #landingWidgets .lw-card {
-  box-sizing: border-box;
-  margin-top: 8px;
-  padding: 6px 22px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 28px;
-  background-color: rgba(255, 255, 255, 0.12);
-  background-image: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.16) 0%,
-    rgba(255, 255, 255, 0) 60%
-  );
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
-#landingWidgets .lw-card:first-child,
-#landingWidgets .lw-grid {
-  margin-top: 0;
+#landingWidgets .lw-card:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
-#landingWidgets .lw-head {
+/* First-row titles (city in the weather block, month, section titles): the weather city's size and line height. */
+#landingWidgets .lw-head,
+#landingWidgets .lw-month {
   display: flex;
   align-items: center;
-  height: 28px;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  flex: none;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 400;
+  text-transform: none;
 }
 #landingWidgets .lw-icon {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  margin-right: 10px;
+  width: 30px;
+  height: 30px;
+  margin-right: 12px;
   fill: currentColor;
 }
 #landingWidgets .lw-label {
@@ -68,25 +72,25 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-meta {
   flex-shrink: 0;
-  margin-left: 10px;
-  font-size: 22px;
-  font-weight: 400;
+  margin-left: 12px;
+  font-size: 0.7em;
+  opacity: 0.8;
 }
 #landingWidgets .lw-line {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 28px;
-  line-height: 34px;
+  font-size: 1em;
+  line-height: 1.25;
 }
 #landingWidgets .lw-match {
-  margin-top: 0;
+  flex: none;
 }
 #landingWidgets .lw-teams {
   display: flex;
   align-items: center;
-  font-size: 28px;
-  line-height: 36px;
+  font-size: 1em;
+  line-height: 1.25;
 }
 #landingWidgets .lw-team {
   display: flex;
@@ -96,9 +100,9 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-team img {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  margin-right: 8px;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.25em;
   object-fit: contain;
 }
 #landingWidgets .lw-name {
@@ -109,51 +113,55 @@ body.idle-active #landingWidgets,
 }
 #landingWidgets .lw-dash {
   flex-shrink: 0;
-  margin: 0 10px;
+  margin: 0 0.3em;
   opacity: 0.6;
 }
 #landingWidgets .lw-sub {
-  font-size: 22px;
-  line-height: 24px;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.7em;
+  line-height: 1.2;
+  opacity: 0.8;
 }
 #landingWidgets .lw-live .lw-sub {
   color: #ff8a80;
+  opacity: 1;
 }
-/* Month grid: 7 columns of 62 px, rows of 36 px; the text size follows the weather block (34 px values). */
+/* Month grid: fills its column height; the weekday row, then the week rows share the rest. */
 #landingWidgets .lw-grid {
-  padding: 8px 22px 8px;
+  display: flex;
+  flex-direction: column;
 }
-#landingWidgets .lw-month {
-  height: 36px;
-  font-size: 30px;
-  font-weight: 600;
-  line-height: 36px;
-  text-align: center;
-  text-transform: capitalize;
+#landingWidgets .lw-table {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 #landingWidgets .lw-row {
   display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  align-items: center;
+}
+#landingWidgets .lw-row.lw-weekdays {
+  flex: none;
 }
 #landingWidgets .lw-cell {
   display: block;
-  width: 62px;
-  height: 36px;
-  font-size: 28px;
-  line-height: 36px;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 1em;
+  line-height: 1.3;
   text-align: center;
 }
 #landingWidgets .lw-weekday {
-  height: 28px;
-  font-size: 22px;
-  line-height: 28px;
+  font-size: 0.7em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+  opacity: 0.8;
 }
 #landingWidgets .lw-today {
-  border-radius: 18px;
+  margin: 0 6px;
+  border-radius: 999px;
   background-color: rgba(255, 255, 255, 0.9);
   color: #0b0d18;
   font-weight: 600;
-  text-shadow: none;
 }

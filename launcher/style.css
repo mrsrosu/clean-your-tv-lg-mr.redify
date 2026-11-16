@@ -221,6 +221,10 @@ body.scrolled header {
 #homeSurface.ctv-mr-redify #topButtons .pill.focused svg.ctv-info-icon {
   color: #0b0d18;
 }
+/* The focused app's name is not shown with mr.redify (the main page uses that room for the widget columns). */
+#homeSurface.ctv-mr-redify #hero {
+  visibility: hidden !important;
+}
 #homeSurface.ctv-mr-redify #topButtons .pill > span {
   display: none;
 }

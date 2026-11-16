@@ -566,7 +566,8 @@ const assert = require('node:assert/strict'),
         window.__focusBefore = document.activeElement && (document.activeElement.id || document.activeElement.tagName);
       });
       const before = await partStates();
-      assert.ok(before['#hero'].opacity === 1 && before['#hero'].visibility === 'visible', 'visible before idle: ' + JSON.stringify(before['#hero']));
+      assert.equal(before['#hero'].visibility, 'hidden', 'the app name is never shown with mr.redify');
+      assert.equal(before['#topButtons'].visibility, 'visible');
       await page.clock.runFor(5 * MIN + 2000);
       assert.equal(await shown(), true, 'idle shown (' + style + '/' + dim + ')');
       const during = await partStates();
@@ -581,8 +582,7 @@ const assert = require('node:assert/strict'),
       await page.keyboard.press('ArrowLeft'); // wakes, consumed
       assert.equal(await shown(), false, 'woke');
       const after = await partStates();
-      assert.equal(after['#hero'].opacity, 1, 'app name back after wake');
-      assert.equal(after['#hero'].visibility, 'visible');
+      assert.equal(after['#hero'].visibility, 'hidden', 'app name stays hidden after wake');
       assert.equal(after['#topButtons'].visibility, 'visible');
       assert.equal(
         await page.evaluate(() => document.activeElement && (document.activeElement.id || document.activeElement.tagName)),

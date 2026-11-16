@@ -395,7 +395,7 @@
           time = position(doc.getElementById('timeRow')),
           buttons = position(doc.getElementById('topButtons')),
           scale = a.options.scale;
-        const width = effective === 'text' ? 920 : 660;
+        let width = effective === 'text' ? 920 : 660;
         // Local mr.redify fork: on dock-grid, weather of every format sits at the left under the clock.
         const weatherLeft =
           state.preset === 'dock-grid' && isMrRedify();
@@ -413,6 +413,10 @@
           left = effective === 'text' ? 560 : 1920 - 112 - width * scale;
           top = effective === 'text' ? 100 : 72;
         }
+        // Local mr.redify fork: on dock-grid the weather is the first of three equal columns (112 to 1808, 24 px gaps).
+        if (weatherLeft && effective !== 'text')
+          width = Math.floor((1920 - 112 - header.left - 48) / 3) / scale;
+        element.style.minHeight = '';
         element.style.width = width + 'px';
         element.style.left = left + 'px';
         element.style.top = top + 'px';
@@ -420,6 +424,9 @@
         element.style.webkitTransform = element.style.transform;
         fitLabels(element);
         const bottom = top + element.offsetHeight * scale;
+        // landing-widgets.js asks for the block to be as tall as the other columns; not part of the reserved region.
+        if (element.getAttribute('data-lw-height'))
+          element.style.minHeight = element.getAttribute('data-lw-height') + 'px';
         region = {
           bottom: bottom,
           format: effective,

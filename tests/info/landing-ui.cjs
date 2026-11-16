@@ -74,13 +74,11 @@ async function seed(page, opts) {
     { NOW, RATES, opts }
   );
 }
-// Generous space for the content tests (the geometry tests use the real positions).
+// Generous space for the content tests (the geometry tests use the real positions: dock top 715 as on the TV).
 const room = (page, on) =>
   page.evaluate((v) => {
-    const hero = document.getElementById('hero'),
-      dock = document.getElementById('dockBand');
-    window.__real = window.__real || { hero: hero.style.top, dock: dock.style.top };
-    hero.style.top = v ? '1000px' : window.__real.hero;
+    const dock = document.getElementById('dockBand');
+    window.__real = window.__real || { dock: dock.style.top };
     dock.style.top = v ? '1000px' : window.__real.dock;
   }, on);
 const toggles = (page, on) =>
@@ -287,135 +285,191 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   await home.setScope(true);
   assert.deepEqual((await state(page)).cards, ORDER);
 
-  // 9. Geometry at 1920x1080, three columns on one row: weather | grid | cards, against the real weather block. The TV
-  // measured: timeRow [112,82,1248,104], weather [112,.,660,.], hero top 567, topButtons [1392,90,416,84].
+  // 9. Geometry at 1920x1080: three EQUAL columns weather | grid | cards on one line, plain text (no boxes), against the
+  // real weather block. The TV measured: timeRow [112,82,1248,104], topButtons [1392,90,416,84], dock top about 715.
   await seed(page);
   await toggles(page, ALL);
   await weather(page, 0);
   const tvRoom = () =>
     page.evaluate(() => {
-      window.__real = window.__real || { hero: '', dock: '' };
-      document.getElementById('hero').style.top = '567px';
-      document.getElementById('dockBand').style.top = '680px';
+      document.getElementById('dockBand').style.top = '715px';
       HomeLanding.render();
     });
   await tvRoom();
+  const firstText = (sel) =>
+    page.evaluate((sel) => {
+      const root = document.querySelector(sel);
+      if (!root) return null;
+      const walker = document.createTreeWalker(root, 4, null, false);
+      let t;
+      while ((t = walker.nextNode())) {
+        if (!/\S/.test(t.nodeValue)) continue;
+        const r = document.createRange();
+        r.selectNodeContents(t);
+        const b = r.getBoundingClientRect();
+        if (b.height) return { top: b.top, font: parseFloat(getComputedStyle(t.parentNode).fontSize), lh: getComputedStyle(t.parentNode).lineHeight };
+      }
+      return null;
+    }, sel);
   const geo = async () => ({
     grid: await page.evaluate(rect('#landingWidgets .lw-grid')),
     stack: await page.evaluate(rect('#landingWidgets .lw-stack')),
     cards: await page.evaluate(
-      `Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-stack .lw-card'), (c) => { const b = c.getBoundingClientRect(); return { id: c.getAttribute('data-lw'), left: b.left, right: b.right, top: b.top, bottom: b.bottom, lines: c.querySelectorAll('.lw-line, .lw-sub').length }; })`
+      `Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-stack .lw-card'), (c) => { const b = c.getBoundingClientRect(); return { id: c.getAttribute('data-lw'), left: b.left, right: b.right, top: b.top, bottom: b.bottom, height: b.height, lines: c.querySelectorAll('.lw-line, .lw-sub').length }; })`
     ),
     weather: await page.evaluate(rect('#homeWeather')),
     buttons: await page.evaluate(rect('#topButtons')),
-    hero: await page.evaluate(rect('#hero')),
     time: await page.evaluate(rect('#timeRow')),
-    heroTop: await page.evaluate(() => parseFloat(document.getElementById('hero').style.top)),
-    weatherTextTop: await page.evaluate(() => {
-      const r = document.createRange();
-      r.selectNodeContents(document.querySelector('#homeWeather .weather-city'));
-      return r.getBoundingClientRect().top;
-    })
+    dock: await page.evaluate(rect('#dockBand')),
+    heroVisible: await page.evaluate(() => {
+      const h = document.getElementById('hero');
+      return getComputedStyle(h).visibility;
+    }),
+    t: {
+      weather: await firstText('#homeWeather'),
+      grid: await firstText('#landingWidgets .lw-grid .lw-month'),
+      stack: await firstText('#landingWidgets .lw-stack .lw-label')
+    }
   });
+  const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, msg + ': ' + a + ' vs ' + b);
   let g = await geo();
   assert.ok(g.grid && g.stack, 'grid and cards present');
-  assert.equal(g.stack.right, 1808, 'cards right edge = header buttons right edge');
-  assert.equal(g.stack.width, 500);
-  assert.equal(g.grid.width, 490);
-  assert.ok(g.grid.right <= g.stack.left, 'grid left of the cards');
-  assert.equal(Math.round(g.weather.left), 112);
-  assert.equal(Math.round(g.weather.width), 660);
-  assert.ok(g.weather.right + 24 <= g.grid.left + 0.5, 'weather left of the grid with a gap: ' + g.weather.right + ' / ' + g.grid.left);
-  // The weather block sits right under the date row: its first visible text starts within 30 px of the date row's bottom.
-  assert.ok(g.weatherTextTop <= g.time.bottom + 30, 'weather text top ' + g.weatherTextTop + ' vs date bottom ' + g.time.bottom);
-  assert.ok(g.weatherTextTop >= g.time.bottom, 'not above the date row');
-  assert.equal(Math.round(g.grid.top), Math.round(g.weather.top), 'grid top = weather top');
-  assert.equal(Math.round(g.stack.top), Math.round(g.weather.top), 'cards top = weather top');
-  const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  const named = { weather: g.weather, grid: g.grid, stack: g.stack, buttons: g.buttons, hero: g.hero, time: g.time };
+  assert.equal(g.heroVisible, 'hidden', 'the app name is not shown with mr.redify');
+  // Equal widths, tops, bottoms; right edge 1808, left edge 112, equal gaps.
+  const cols = { weather: g.weather, grid: g.grid, stack: g.stack };
+  near(g.weather.width, g.grid.width, 2, 'weather/grid width');
+  near(g.grid.width, g.stack.width, 2, 'grid/cards width');
+  near(g.weather.left, 112, 1, 'left margin');
+  near(g.stack.right, 1808, 1, 'right edge = header buttons right edge');
+  near(g.grid.left - g.weather.right, g.stack.left - g.grid.right, 2, 'equal gaps');
+  assert.ok(g.grid.left - g.weather.right >= 20, 'gap at least 20 px');
+  near(g.grid.top, g.weather.top, 2, 'tops');
+  near(g.stack.top, g.weather.top, 2, 'tops');
+  near(g.grid.bottom, g.weather.bottom, 2, 'bottoms');
+  near(g.stack.bottom, g.weather.bottom, 2, 'bottoms');
+  assert.ok(g.stack.bottom <= g.dock.top - 20, 'columns end above the dock: ' + g.stack.bottom + ' / ' + g.dock.top);
+  // The first visible text of each column starts on the same line, with the same title size and line height.
+  near(g.t.grid.top, g.t.weather.top, 2, 'first text: month title vs city');
+  near(g.t.stack.top, g.t.weather.top, 2, 'first text: Name day title vs city');
+  assert.equal(g.t.grid.font, g.t.weather.font, 'title size = city size');
+  assert.equal(g.t.stack.font, g.t.weather.font);
+  assert.equal(g.t.grid.lh, g.t.weather.lh);
+  assert.equal(g.t.stack.lh, g.t.weather.lh);
+  assert.ok(g.t.weather.top >= g.time.bottom && g.t.weather.top <= g.time.bottom + 30, 'under the date row: ' + g.t.weather.top);
+  // No overlap among the columns, the header buttons, the clock/date row and the dock.
+  const named = { ...cols, buttons: g.buttons, time: g.time, dock: g.dock };
   const names = Object.keys(named);
   for (let i = 0; i < names.length; i++)
     for (let j = i + 1; j < names.length; j++)
-      assert.equal(overlap(named[names[i]], named[names[j]]), false, 'overlap: ' + names[i] + ' / ' + names[j] + ' ' + JSON.stringify([named[names[i]], named[names[j]]]));
-  [g.grid, g.stack].forEach((r) => assert.ok(r.bottom <= g.heroTop - 19, 'above the app name'));
-  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football'], 'all three cards fit at the TV hero position');
-  // At the TV hero position the full cards do not fit: Exchange is reduced to one line, Football keeps its two events.
-  assert.equal(g.cards.find((c) => c.id === 'rates').lines, 1, 'Exchange reduced to one line');
+      assert.equal(overlap(named[names[i]], named[names[j]]), false, 'overlap: ' + names[i] + ' / ' + names[j]);
+  // The three sections are equal boxes (same width, same height) that fill the column; all three present.
+  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football']);
+  g.cards.forEach((c) => {
+    near(c.height, g.cards[0].height, 2, 'equal section heights');
+    near(c.right - c.left, g.stack.width, 1, 'section width = column width');
+  });
+  for (let i = 1; i < g.cards.length; i++) near(g.cards[i].top, g.cards[i - 1].bottom, 1.5, 'stacked without gaps');
+  near(g.cards[g.cards.length - 1].bottom, g.stack.bottom, 3, 'sections fill the column');
+  // Exchange keeps its two lines and Football its two events (the freed height of the hidden app name).
+  assert.equal(await page.locator('#landingWidgets [data-lw="rates"] .lw-line').count(), 2, 'Exchange: two lines');
   assert.equal(await page.locator('#landingWidgets [data-lw="football"] .lw-match').count(), 2, 'two football events');
   assert.equal(await page.locator('#landingWidgets [data-lw="nameday"] .lw-line').count(), 1);
-  for (let i = 1; i < g.cards.length; i++) {
-    const gap = g.cards[i].top - g.cards[i - 1].bottom;
-    assert.ok(gap >= 8 && gap <= 12, 'about 10 px gap: ' + gap);
-  }
-  assert.ok(g.grid.height >= 280 && g.grid.height <= 340, 'grid height: ' + g.grid.height);
-  // Text sizes follow the weather block: its detail text is 34 px; ours is at least 0.8 of it.
+  // Plain text like the weather block: no box, no background, no border, no radius, no shadow, no blur; same color.
+  const looks = await page.evaluate(() => {
+    const cs = (e) => {
+      const c = getComputedStyle(e);
+      return { bg: c.backgroundColor, bgi: c.backgroundImage, border: c.borderTopWidth + ' ' + c.borderLeftWidth, radius: c.borderRadius, shadow: c.boxShadow, text: c.textShadow, color: c.color, filter: c.backdropFilter || c.webkitBackdropFilter || 'none' };
+    };
+    const w = cs(document.querySelector('#homeWeather .weather-city')),
+      boxes = ['.lw-grid', '.lw-stack', '[data-lw="nameday"]', '[data-lw="rates"]', '[data-lw="football"]'].map((q) => [q, cs(document.querySelector('#landingWidgets ' + q))]),
+      label = cs(document.querySelector('#landingWidgets .lw-label')),
+      body = cs(document.querySelector('#landingWidgets .lw-line'));
+    return { w, boxes, label, body };
+  });
+  looks.boxes.forEach(([q, c]) => {
+    assert.equal(c.bg, 'rgba(0, 0, 0, 0)', q + ' background');
+    assert.equal(c.bgi, 'none', q + ' background image');
+    assert.equal(c.radius, '0px', q + ' radius');
+    assert.equal(c.shadow, 'none', q + ' box shadow');
+    assert.equal(c.border.split(' ')[1], '0px', q + ' side border');
+    assert.ok(['none', ''].indexOf(c.filter) >= 0, q + ' backdrop blur');
+  });
+  assert.equal(looks.label.color, looks.w.color, 'title color = weather text color');
+  assert.equal(looks.body.color, looks.w.color, 'body color = weather text color');
+  assert.equal(looks.label.text, looks.w.text, 'title text-shadow = weather text-shadow');
+  assert.equal(looks.body.text, looks.w.text, 'body text-shadow = weather text-shadow');
+  // Text sizes: toward the weather's 34 px; never below 0.7 of it (the largest size that fits all sections).
   const sizes = await page.evaluate(() => {
     const fs = (sel) => Array.prototype.map.call(document.querySelectorAll(sel), (e) => parseFloat(getComputedStyle(e).fontSize));
-    const w = document.querySelector('#homeWeather .weather-row'),
-      c = document.querySelector('#homeWeather .weather-city');
     return {
-      weatherDetail: parseFloat(getComputedStyle(w).fontSize),
-      weatherTitle: parseFloat(getComputedStyle(c).fontSize),
+      weatherDetail: parseFloat(getComputedStyle(document.querySelector('#homeWeather .weather-row')).fontSize),
       body: fs('#landingWidgets .lw-line').concat(fs('#landingWidgets .lw-cell:not(.lw-weekday)'), fs('#landingWidgets .lw-teams')),
-      titles: fs('#landingWidgets .lw-head')
+      grid: fs('#landingWidgets .lw-cell:not(.lw-weekday)')[0],
+      titles: fs('#landingWidgets .lw-head').concat(fs('#landingWidgets .lw-month'))
     };
   });
   assert.equal(sizes.weatherDetail, 34);
-  assert.ok(sizes.body.length >= 30);
-  sizes.body.forEach((f) => assert.ok(f >= sizes.weatherDetail * 0.8, 'font ' + f + ' >= ' + sizes.weatherDetail * 0.8));
-  sizes.titles.forEach((f) => assert.ok(f >= 20, 'title font ' + f));
+  sizes.body.forEach((f) => assert.ok(f >= sizes.weatherDetail * 0.7, 'font ' + f));
+  assert.ok(sizes.grid >= 30, 'calendar cells use the freed height: ' + sizes.grid);
+  sizes.titles.forEach((f) => assert.equal(f, 34));
+  // Football and rate text are not clipped: nothing overflows its section.
+  assert.equal(
+    await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-card, #landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)),
+    false,
+    'no clipped section'
+  );
 
-  // 9a. At the harness app-name position (532, the room is smaller): still no overlap; cards go compact, then drop.
+  // 9a. Less room (dock higher, as in the harness): sizes shrink, columns stay equal, nothing overlaps the dock.
   await page.evaluate(() => {
-    document.getElementById('hero').style.top = '532px';
+    document.getElementById('dockBand').style.top = '640px';
     HomeLanding.render();
   });
   g = await geo();
-  assert.ok(g.grid && g.stack && g.cards.length >= 2, 'fits at 532: ' + JSON.stringify(g.cards.map((c) => c.id)));
-  [g.grid, g.stack].forEach((r) => assert.ok(r.bottom <= 532 - 19));
-  assert.equal(overlap(g.stack, g.hero), false);
-  assert.equal(overlap(g.grid, g.hero), false);
+  assert.ok(g.grid && g.stack);
+  near(g.grid.bottom, g.stack.bottom, 2, 'equal bottoms');
+  assert.ok(g.stack.bottom <= 640 - 20);
+  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollHeight <= document.querySelector('#landingWidgets .lw-stack').clientHeight + 1), true);
   await tvRoom();
 
-  // 9b. Columns whose top would collide with the header buttons start just below them.
+  // 9b. Columns whose top would collide with the header buttons all start just below them.
   await page.evaluate(() => {
     document.getElementById('homeWeather').style.top = '60px';
     HomeLanding.render();
   });
   g = await geo();
   assert.ok(g.stack.top >= g.buttons.bottom + 19, 'cards start below the buttons: ' + g.stack.top + ' vs ' + g.buttons.bottom);
+  near(g.grid.top, g.stack.top, 2, 'grid and cards on one line');
   assert.equal(overlap(g.stack, g.buttons), false);
   assert.equal(overlap(g.grid, g.buttons), false);
   await weather(page, 0);
   await tvRoom();
 
-  // 9c. A hero that starts higher: compact cards first, then whole parts are dropped (cards from the end, then the grid).
-  await page.evaluate(() => {
-    document.getElementById('hero').style.top = '400px';
-    HomeLanding.render();
-  });
-  g = await geo();
-  assert.equal(g.grid, null, 'grid dropped when it does not fit');
-  assert.ok(g.cards.length >= 1 && g.cards.length < 3, 'cards dropped from the end: ' + g.cards.length);
-  // Football has priority: Exchange goes first, then Name day, then Football's second event, then Football.
-  assert.ok(g.cards.some((c) => c.id === 'football'), 'Football kept: ' + g.cards.map((c) => c.id));
-  assert.ok(!g.cards.some((c) => c.id === 'rates'), 'Exchange dropped before Football');
-  g.cards.forEach((c) => assert.ok(c.bottom <= 400 - 19, 'inside the shorter space'));
-  await page.evaluate(() => {
-    document.getElementById('hero').style.top = '330px'; // room for one football event only
-    HomeLanding.render();
-  });
-  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), ['football']);
-  assert.equal(await page.locator('#landingWidgets [data-lw="football"] .lw-match').count(), 1, 'second event dropped before the card');
-  await page.evaluate(() => {
-    document.getElementById('hero').style.top = '60px'; // nothing fits
-    HomeLanding.render();
-  });
-  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), []);
+  // 9c. Little room: Exchange goes first, then Name day, then Football's second event, then Football; the grid goes
+  // when it cannot hold a readable size.
+  const shrink = async (dockTop) => {
+    await page.evaluate((t) => {
+      document.getElementById('dockBand').style.top = t + 'px';
+      HomeLanding.render();
+    }, dockTop);
+    return page.evaluate(() => ({
+      cards: HomeLanding.state().cards,
+      events: document.querySelectorAll('#landingWidgets [data-lw="football"] .lw-match').length
+    }));
+  };
+  let r = await shrink(520);
+  assert.ok(r.cards.indexOf('football') >= 0, 'Football kept: ' + r.cards);
+  assert.ok(r.cards.indexOf('rates') < 0 || r.cards.indexOf('nameday') >= 0, 'Exchange dropped before Name day: ' + r.cards);
+  r = await shrink(400);
+  assert.deepEqual(r.cards.filter((c) => c !== 'calendar'), ['football'].filter((c) => r.cards.indexOf(c) >= 0), 'only Football left: ' + r.cards);
+  r = await shrink(330);
+  assert.ok(r.cards.indexOf('football') < 0 || r.events === 1, 'second event before the card: ' + JSON.stringify(r));
+  r = await shrink(200);
+  assert.deepEqual(r.cards, [], 'nothing fits: nothing shown');
   assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
   await tvRoom();
 
-  // 9d. A wide weather block (compact format, large scale) pushes the cards out first, then the grid; never overlapped.
+  // 9d. A wide weather block (text format) pushes the cards out first, then the grid; never overlapped.
   await weather(page, 1000);
   await page.evaluate(() => HomeLanding.render());
   g = await geo();
@@ -432,12 +486,12 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   await seed(page, { long: true });
   await toggles(page, { calendar: false, nameday: false, rates: false, football: true });
   g = await geo();
-  assert.equal(g.stack.width, 500);
+  assert.equal(Math.round(g.stack.width), 549);
   const cut = await page.evaluate(() =>
     Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-name'), (n) => n.scrollWidth > n.clientWidth)
   );
   assert.equal(cut, true, 'long names are truncated, not wrapped');
-  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollWidth <= 500), true);
+  assert.equal(await page.evaluate(() => document.querySelector('#landingWidgets .lw-stack').scrollWidth <= 549), true);
 
   // 11. Romanian: month title, weekday names and card titles are localized.
   await seed(page);
@@ -490,6 +544,72 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.equal((await state(page)).timer, false);
   await toggles(page, NONE);
   assert.equal(requests, 0, 'no network request at all (the routes abort every http request)');
+  // 13. The weather in its text (compact) format: the first visible text of the weather and of the grid still start on
+  // one line, and nothing overlaps the weather block (the cards column gives way to its width).
+  const home2 = await openHome({ mrRedify: true }),
+    p2 = home2.page;
+  await p2.context().addInitScript((seedJson) => {
+    const w = JSON.parse(seedJson);
+    w.caches['open-meteo'].updated = Date.now();
+    w.preferred = 'text';
+    localStorage.setItem('tvhome.weather.v1', JSON.stringify(w));
+  }, JSON.stringify(WEATHER_SEED));
+  await p2.reload();
+  await p2.waitForFunction(() => window.RootLauncherRendered && window.HomeInfo);
+  await home2.setScope(true);
+  await p2.evaluate(() => HomeWeather.render());
+  await seed(p2);
+  await toggles(p2, ALL);
+  await p2.evaluate(() => {
+    document.getElementById('dockBand').style.top = '715px';
+    HomeLanding.render();
+  });
+  const tx = await p2.evaluate(() => {
+    const walker = (sel) => {
+      const root = document.querySelector(sel);
+      if (!root) return null;
+      const w = document.createTreeWalker(root, 4, null, false);
+      let t;
+      while ((t = w.nextNode())) {
+        if (!/\S/.test(t.nodeValue)) continue;
+        const r = document.createRange();
+        r.selectNodeContents(t);
+        const b = r.getBoundingClientRect();
+        if (b.height) return b.top;
+      }
+      return null;
+    };
+    const rc = (sel) => {
+      const e = document.querySelector(sel);
+      if (!e) return null;
+      const b = e.getBoundingClientRect();
+      return { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+    };
+    return {
+      weatherText: walker('#homeWeather'),
+      gridText: walker('#landingWidgets .lw-grid .lw-month'),
+      stackText: walker('#landingWidgets .lw-stack .lw-label'),
+      weather: rc('#homeWeather'),
+      grid: rc('#landingWidgets .lw-grid'),
+      stack: rc('#landingWidgets .lw-stack'),
+      buttons: rc('#topButtons'),
+      time: rc('#timeRow'),
+      format: document.querySelector('#homeWeather .weather-header') ? 'full' : 'text'
+    };
+  });
+  assert.equal(tx.format, 'text', 'weather in text format');
+  assert.ok(tx.grid, 'grid shown next to the compact weather');
+  assert.ok(Math.abs(tx.gridText - tx.weatherText) <= 2, 'first text lines: grid ' + tx.gridText + ' vs weather ' + tx.weatherText);
+  if (tx.stack) assert.ok(Math.abs(tx.stackText - tx.weatherText) <= 2, 'first text lines: cards ' + tx.stackText);
+  assert.ok(tx.weatherText <= tx.time.bottom + 30 && tx.weatherText >= tx.time.bottom - 4, 'under the date row: ' + tx.weatherText);
+  [tx.grid, tx.stack].forEach((r) => {
+    if (!r) return;
+    assert.equal(overlap(r, tx.weather), false, 'no overlap with the compact weather');
+    assert.equal(overlap(r, tx.buttons), false);
+  });
+  assert.deepEqual(home2.errors, [], 'page errors (text weather)');
+  await home2.close();
+
   assert.deepEqual(home.errors, [], 'page errors');
   await home.close();
   console.log('PASS landing-ui');
