@@ -1,0 +1,147 @@
+/* Calendar page (info panel) and Calendar settings tab. */
+.cal-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.cal-page .cal-title {
+  font-size: 44px;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+.cal-page .cal-grid {
+  width: 1000px;
+}
+.cal-page .cal-row {
+  display: flex;
+}
+.cal-page .cal-weekday,
+.cal-page .cal-cell,
+.cal-page .cal-weekno {
+  box-sizing: border-box;
+  width: 130px;
+  margin: 3px;
+  text-align: center;
+}
+.cal-page .cal-weekday {
+  font-size: 24px;
+  opacity: 0.65;
+}
+.cal-page .cal-weekno {
+  width: 70px;
+  font-size: 22px;
+  line-height: 62px;
+  opacity: 0.5;
+}
+.cal-page .cal-weekno-head {
+  line-height: normal;
+}
+.cal-page .cal-cell {
+  position: relative;
+  height: 62px;
+  line-height: 62px;
+  font-size: 30px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  opacity: 0.35;
+}
+.cal-page .cal-cell.in-month {
+  opacity: 1;
+}
+.cal-page .cal-cell.weekend {
+  color: #ffb4a8;
+}
+.cal-page .cal-cell.holiday {
+  background: rgba(255, 120, 100, 0.28);
+  color: #ffd7d0;
+}
+.cal-page .cal-cell.has-event::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: #7fd1ff;
+}
+.cal-page .cal-cell.today {
+  border-color: #f5f7fa;
+  font-weight: 700;
+}
+.cal-page .cal-cell.selected {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: #7fd1ff;
+}
+.cal-page .cal-detail {
+  margin-top: 20px;
+  font-size: 28px;
+  line-height: 1.4;
+}
+.cal-page .cal-date {
+  font-size: 32px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.cal-page .cal-label {
+  display: inline-block;
+  min-width: 190px;
+  opacity: 0.65;
+}
+.cal-page .cal-none,
+.cal-page .cal-empty {
+  opacity: 0.65;
+}
+/* Settings tab */
+.cal-tab .cal-section {
+  margin-bottom: 24px;
+}
+.cal-tab .cal-section-title {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+.cal-tab button,
+.cal-tab input {
+  font-size: 24px;
+  padding: 10px 18px;
+  margin-right: 12px;
+}
+.cal-tab button.selected {
+  border-color: #7fd1ff;
+  background: rgba(127, 209, 255, 0.25);
+}
+.cal-tab .cal-field {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+.cal-tab .cal-field-label {
+  display: inline-block;
+  min-width: 160px;
+  font-size: 24px;
+}
+.cal-tab .cal-value {
+  display: inline-block;
+  min-width: 150px;
+  margin-right: 12px;
+  text-align: center;
+  font-size: 26px;
+}
+.cal-tab .cal-title-input {
+  flex: 1;
+  min-width: 0;
+}
+.cal-tab .cal-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0;
+  font-size: 24px;
+}
+.cal-tab .cal-status,
+.cal-tab .cal-count {
+  margin: 8px 0;
+  font-size: 22px;
+  opacity: 0.8;
+}

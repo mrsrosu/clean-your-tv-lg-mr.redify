@@ -8,7 +8,8 @@ const assert = require('node:assert/strict'),
     info = page.locator('#btnInfo'),
     panel = page.locator('#infoPanel');
   await page.evaluate(() => {
-    ['one', 'two'].forEach((id) =>
+    // The real calendar page is registered first; keep its slot but make it a plain page here.
+    ['calendar', 'one', 'two'].forEach((id) =>
       InfoPanel.registerPage({
         id,
         label: id,
@@ -54,6 +55,8 @@ const assert = require('node:assert/strict'),
   // OK opens.
   await page.keyboard.press('Enter');
   assert.equal(await panel.isVisible(), true, 'panel open');
+  assert.equal(await pageText(), 'page-calendar');
+  await page.keyboard.press('ArrowRight');
   assert.equal(await pageText(), 'page-one');
   assert.equal(await page.evaluate(() => window.__shown_one), 1);
   await page.keyboard.press('ArrowRight');
@@ -63,6 +66,10 @@ const assert = require('node:assert/strict'),
   assert.equal(await pageText(), 'page-two', 'no wrap past last page');
   await page.keyboard.press('ArrowLeft');
   assert.equal(await pageText(), 'page-one');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await pageText(), 'page-calendar');
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await pageText(), 'page-calendar', 'no wrap before first page');
   // Back closes, focus returns to the button, Home is not exited.
   // A consumed Back never reaches Home's own handler, which is what would let the OS exit it.
   const backConsumed = await page.evaluate(() => {
@@ -108,7 +115,7 @@ const assert = require('node:assert/strict'),
   assert.equal(await info.isVisible(), true);
   assert.deepEqual(home.errors, [], 'page errors');
   await home.close();
-  // Empty state, fresh page without registered pages.
+  // Fresh page: only the built-in calendar page is registered; the panel opens on it.
   const empty = await openHome({ mrRedify: true });
   await empty.page.evaluate(() => InfoPanel.open());
   assert.equal(await empty.page.locator('#infoPanel').isVisible(), true);
