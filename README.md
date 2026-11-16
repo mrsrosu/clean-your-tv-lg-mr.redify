@@ -1,3 +1,5 @@
+> **mr.redify edition:** this is a fork with layout tweaks for the mr.redify theme (icon-only header buttons, app name on the right, weather on the left, 3-day forecast). See [MR-REDIFY.md](MR-REDIFY.md). Upstream project: [Razdva122/clean-your-tv-lg-webos](https://github.com/Razdva122/clean-your-tv-lg-webos).
+
 ![Clean Your TV — for LG webOS](assets/brand/readme-logo.png#gh-light-mode-only)
 ![Clean Your TV — for LG webOS](assets/brand/readme-logo-dark.png#gh-dark-mode-only)
 
