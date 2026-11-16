@@ -152,7 +152,15 @@
           ? root.HomeFootball.logoNode(side.logo, 22)
           : null;
     if (logo) box.appendChild(logo);
-    box.appendChild(el('span', 'lw-name', side.name));
+    box.appendChild(
+      el(
+        'span',
+        'lw-name',
+        root.HomeFootball && root.HomeFootball.label
+          ? root.HomeFootball.label(side.name)
+          : side.name
+      )
+    );
     return box;
   }
   function footballCard(items) {

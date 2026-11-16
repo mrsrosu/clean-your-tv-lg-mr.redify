@@ -105,7 +105,7 @@ const ARS = ['359', 'Arsenal'],
   HUL = ['306', 'Hull City'],
   NEW = ['361', 'Newcastle United'];
 
-test('competitions: the eight ids and names', () => {
+test('competitions: the eight leagues plus the national-teams group, ids and names', () => {
   const E = context(memory(), {}).FootballEspn;
   assert.deepEqual(
     E.competitions.map((c) => c.id),
@@ -117,7 +117,8 @@ test('competitions: the eight ids and names', () => {
       'fra.1',
       'rou.1',
       'uefa.champions',
-      'uefa.europa'
+      'uefa.europa',
+      'nat'
     ]
   );
   assert.equal(E.competitions[0].name, 'Premier League');
@@ -813,6 +814,84 @@ test('logos: HomeInfoFetch.logoUrl host list', () => {
     'https://a.espncdn.com:8443/x.png', '//a.espncdn.com/x.png', 'data:image/png;base64,AA==',
     'https://a.espncdn.com/' + 'x'.repeat(300)
   ].forEach((u) => assert.equal(f(u), '', String(u)));
+});
+// National teams: Romania (ESPN 473), matches merged from several ESPN leagues. Fixtures are shaped like ESPN schedule
+// answers (synthetic: no live request is made).
+const natfx = (n) =>
+  fs.readFileSync('tests/info/fixtures/espn-nat-' + n + '.json', 'utf8');
+const NATIONAL_SLUGS = ['fifa.friendly', 'fifa.worldq.uefa', 'uefa.nations', 'uefa.euro'];
+const natRoutes = () => {
+  const r = {};
+  NATIONAL_SLUGS.forEach((s) => (r[BASE + s + '/teams/473/schedule'] = natfx('empty')));
+  r[BASE + 'fifa.friendly/teams/473/schedule'] = natfx('friendly');
+  r[BASE + 'uefa.nations/teams/473/schedule'] = natfx('nations');
+  r[BASE + 'fifa.friendly/teams/473/schedule?fixture=true'] = natfx('fixtures');
+  return r;
+};
+test('nat: listed once after the leagues; its only team is Romania 473 (no request)', async () => {
+  const ctx = context(memory(), {});
+  const nat = ctx.FootballEspn.competitions.find((c) => c.id === 'nat');
+  assert.equal(nat.name, 'National teams');
+  assert.equal(ctx.FootballEspn.competitions.filter((c) => c.id === 'nat').length, 1);
+  const teams = await ctx.FootballEspn.teams('nat');
+  assert.deepEqual(teams, [{ id: '473', name: 'Romania' }]);
+  assert.deepEqual(await ctx.FootballEspn.scoreboard('nat'), []);
+  assert.deepEqual(ctx.requests, [], 'no request for the team list or the board');
+});
+test('nat: matches merged from the leagues, deduped by event id, sorted, logo kept; <= 6 requests', async () => {
+  const ctx = context(memory(), natRoutes()),
+    list = await ctx.FootballEspn.teamMatches('nat', '473');
+  assert.deepEqual(list.map((m) => m.id), ['n3', 'n2', 'n1', 'n4'], 'dedupe n1, sorted by start');
+  assert.ok(list.every((m) => m.competition === 'nat'));
+  assert.ok(ctx.requests.length <= 6 && ctx.requests.length === 5, 'requests: ' + ctx.requests.length);
+  assert.deepEqual(
+    ctx.requests.filter((u) => /fixture=true/.test(u)),
+    [BASE + 'fifa.friendly/teams/473/schedule?fixture=true'],
+    'fixtures only from the league with the newest match'
+  );
+  assert.equal(list[2].home.logo, 'https://a.espncdn.com/i/teamlogos/countries/500/rou.png');
+  assert.equal(list[3].state, 'pre');
+  assert.equal(list[3].away.name, 'Romania');
+});
+test('nat: a failing league is skipped, all failing rejects, nothing at all gives []', async () => {
+  const routes = natRoutes();
+  routes[BASE + 'uefa.nations/teams/473/schedule'] = 'net';
+  delete routes[BASE + 'uefa.euro/teams/473/schedule'];
+  const ctx = context(memory(), routes);
+  assert.deepEqual((await ctx.FootballEspn.teamMatches('nat', '473')).map((m) => m.id), ['n2', 'n1', 'n4']);
+  const none = {};
+  NATIONAL_SLUGS.forEach((s) => (none[BASE + s + '/teams/473/schedule'] = 'net'));
+  await assert.rejects(context(memory(), none).FootballEspn.teamMatches('nat', '473'));
+  const empty = {};
+  NATIONAL_SLUGS.forEach((s) => (empty[BASE + s + '/teams/473/schedule'] = natfx('empty')));
+  const ctx3 = context(memory(), empty);
+  assert.deepEqual(await ctx3.FootballEspn.teamMatches('nat', '473'), []);
+  assert.equal(ctx3.requests.length, 4, 'no league has matches: no fixture request');
+});
+test('nat: store accepts it (competition and team), counts towards the 5; statuses and card use it', async () => {
+  const mem = memory(),
+    ctx = context(mem, natRoutes());
+  ctx.HomeFootball.setClock(() => new Date('2026-11-16T12:00:00Z'));
+  ctx.HomeInfo.football.set({
+    competitions: ['nat', 'zzz.1'],
+    teams: [{ competition: 'nat', id: '473', name: 'Romania' }, { competition: 'zzz.1', id: '1', name: 'X' }]
+  });
+  assert.deepEqual(ctx.HomeInfo.football.get().competitions, ['nat']);
+  assert.deepEqual(ctx.HomeInfo.football.get().teams, [{ competition: 'nat', id: '473', name: 'Romania' }]);
+  const t = (i) => ({ competition: 'eng.1', id: String(i), name: 'T' + i });
+  ctx.HomeInfo.football.set({ teams: [{ competition: 'nat', id: '473', name: 'Romania' }, t(1), t(2), t(3), t(4), t(5)] });
+  assert.equal(ctx.HomeInfo.football.get().teams.length, 5);
+  ctx.HomeInfo.football.set({ teams: [{ competition: 'nat', id: '473', name: 'Romania' }] });
+  const r = await ctx.HomeFootball.refresh();
+  assert.equal(r.state, 'ok');
+  const items = ctx.HomeFootball.landingItems();
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, 'next');
+  assert.equal(items[0].match.away.name, 'Romania');
+  assert.match(ctx.HomeFootball.idleLines()[0], /Bosnia – Romania 20\.11/);
+  const reqs = ctx.requests.length;
+  await ctx.HomeFootball.refresh();
+  assert.equal(ctx.requests.length, reqs, 'cached (hourly): no new requests');
 });
 (async () => {
   for (const [name, fn] of tests) {

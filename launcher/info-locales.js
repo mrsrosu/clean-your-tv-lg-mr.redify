@@ -101,6 +101,8 @@ HomeI18n.add({
     'Loading teams…': 'Se încarcă echipele…',
     'Teams unavailable': 'Echipele nu sunt disponibile',
     'At most 5 teams': 'Cel mult 5 echipe',
-    'Football data unavailable': 'Datele de fotbal nu sunt disponibile'
+    'Football data unavailable': 'Datele de fotbal nu sunt disponibile',
+    'National teams': 'Echipe naționale',
+    'Romania': 'România'
   }
 });

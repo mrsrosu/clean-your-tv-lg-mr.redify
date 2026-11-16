@@ -1,0 +1,121 @@
+{
+ "team": {
+  "id": "473"
+ },
+ "events": [
+  {
+   "id": "n1",
+   "date": "2026-06-06T16:00Z",
+   "name": "Wales at Romania",
+   "shortName": "HUL @ ARS",
+   "competitions": [
+    {
+     "id": "n1",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 300.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "473",
+        "displayName": "Romania",
+        "shortDisplayName": "Romania",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/countries/500/rou.png"
+         }
+        ]
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "578",
+        "displayName": "Wales",
+        "shortDisplayName": "Wales"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "date": "2026-03-26T19:45Z",
+   "name": "Romania at Slovenia",
+   "shortName": "HUL @ ARS",
+   "competitions": [
+    {
+     "id": "n2",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 300.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "480",
+        "displayName": "Slovenia",
+        "shortDisplayName": "Slovenia"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 2.0,
+        "displayValue": "2"
+       },
+       "team": {
+        "id": "473",
+        "displayName": "Romania",
+        "shortDisplayName": "Romania",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/countries/500/rou.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

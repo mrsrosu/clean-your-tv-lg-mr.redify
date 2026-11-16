@@ -5,7 +5,8 @@
  * teamMatches(competition, teamId)    played matches (schedule) plus upcoming ones (schedule?fixture=true)
  * Every answer is normalised to Match { id, competition, home:{id,name,score,logo?}, away:{id,name,score,logo?}, start (ISO),
  * state 'pre'|'in'|'post', clock }. A payload of another shape yields [] (no exception); network errors reject.
- * No standings anywhere.
+ * The competition 'nat' (National teams) is a group whose only team is Romania (473); its matches come from several
+ * ESPN leagues (see nationalMatches). No standings anywhere.
  */
 (function (root) {
   'use strict';
@@ -18,7 +19,19 @@
       { id: 'fra.1', name: 'Ligue 1' },
       { id: 'rou.1', name: 'Liga 1 România' },
       { id: 'uefa.champions', name: 'Champions League' },
-      { id: 'uefa.europa', name: 'Europa League' }
+      { id: 'uefa.europa', name: 'Europa League' },
+      // A group, not a league: its only team is Romania (ESPN id 473), whose matches are read from the leagues below.
+      { id: 'nat', name: 'National teams' }
+    ],
+    NATIONAL = 'nat',
+    NATIONAL_TEAMS = [{ id: '473', name: 'Romania' }],
+    // ESPN leagues that carry Romania's matches (friendlies, World Cup and Nations League qualifying, Euro). A league
+    // slug for the Euro 2028 qualifiers is not known to exist and is not guessed.
+    NATIONAL_LEAGUES = [
+      'fifa.friendly',
+      'fifa.worldq.uefa',
+      'uefa.nations',
+      'uefa.euro'
     ];
 
   function known(id) {
@@ -167,6 +180,8 @@
       : root.Promise.reject(new Error('football-unknown-competition'));
   }
   function scoreboard(competition) {
+    // The national-teams group has no matchday board (nothing is requested).
+    if (competition === NATIONAL) return root.Promise.resolve([]);
     return (
       checked(competition) ||
       get(competition + '/scoreboard').then(function (p) {
@@ -175,7 +190,73 @@
     );
   }
   function teams(competition) {
+    if (competition === NATIONAL)
+      return root.Promise.resolve(
+        NATIONAL_TEAMS.map(function (x) {
+          return { id: x.id, name: x.name };
+        })
+      );
     return checked(competition) || get(competition + '/teams').then(parseTeams);
+  }
+  // A national team: the played matches (schedule) of each league in NATIONAL_LEAGUES (one request each), plus the
+  // upcoming ones (?fixture=true) from the single league whose newest match is the most recent, i.e. the current
+  // season. 5 requests at most per call; a failing league is skipped (all failing rejects); dedupe by event id.
+  function nationalMatches(teamId) {
+    var tid = encodeURIComponent(teamId);
+    return root.Promise.all(
+      NATIONAL_LEAGUES.map(function (slug) {
+        return get(slug + '/teams/' + tid + '/schedule').then(
+          function (p) {
+            return { slug: slug, list: parseMatches(p, NATIONAL) };
+          },
+          function (e) {
+            return { slug: slug, error: e };
+          }
+        );
+      })
+    ).then(function (parts) {
+      var ok = parts.filter(function (x) {
+          return !x.error;
+        }),
+        newest = '',
+        current = '',
+        seen = {},
+        out = [];
+      if (!ok.length) throw parts[0].error;
+      ok.forEach(function (x) {
+        x.list.forEach(function (m) {
+          if (m.start > newest) {
+            newest = m.start;
+            current = x.slug;
+          }
+        });
+      });
+      return (current
+        ? get(current + '/teams/' + tid + '/schedule?fixture=true').then(
+            function (p) {
+              return parseMatches(p, NATIONAL);
+            },
+            function () {
+              return [];
+            }
+          )
+        : root.Promise.resolve([])
+      ).then(function (upcoming) {
+        ok.forEach(function (x) {
+          x.list.forEach(add);
+        });
+        upcoming.forEach(add);
+        function add(m) {
+          if (!seen[m.id]) {
+            seen[m.id] = true;
+            out.push(m);
+          }
+        }
+        return out.sort(function (a, b) {
+          return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
+        });
+      });
+    });
   }
   // Two lists: the schedule holds the played matches, ?fixture=true the upcoming ones. One failing still answers.
   function teamMatches(competition, teamId) {
@@ -183,6 +264,7 @@
       checked(competition) ||
       (str(teamId) ? null : root.Promise.reject(new Error('football-team')));
     if (bad) return bad;
+    if (competition === NATIONAL) return nationalMatches(teamId);
     var base =
       competition + '/teams/' + encodeURIComponent(teamId) + '/schedule';
     function load(path) {

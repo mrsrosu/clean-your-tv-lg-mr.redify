@@ -242,8 +242,8 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
   assert.equal(await pane.isVisible(), true);
   assert.equal(
     await pane.locator('.fb-comp-chip').count(),
-    8,
-    'real tab with the eight competitions'
+    9, // eight leagues + the National teams group
+    'real tab with the eight competitions and the national-teams group'
   );
   assert.equal(seen.length, 0, 'nothing fetched at build or on opening');
   const comp = (name) => pane.locator('.fb-comp-chip', { hasText: name });

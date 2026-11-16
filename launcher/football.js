@@ -65,6 +65,10 @@
       if (list[i].id === id) return list[i].name;
     return id;
   }
+  // Romania's national team is stored and fetched under ESPN's name; the Romanian UI shows its own spelling.
+  function label(name) {
+    return name === 'Romania' ? t('Romania') : name;
+  }
   function known(id) {
     var list = espn ? espn.competitions : [];
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return true;
@@ -433,17 +437,17 @@
       return v === null || v === undefined ? '?' : String(v);
     }
     return (
-      m.home.name +
+      label(m.home.name) +
       ' ' +
       n(m.home.score) +
       '-' +
       n(m.away.score) +
       ' ' +
-      m.away.name
+      label(m.away.name)
     );
   }
   function versus(m) {
-    return m.home.name + ' – ' + m.away.name;
+    return label(m.home.name) + ' – ' + label(m.away.name);
   }
   function idleLines() {
     var out = [],
@@ -623,7 +627,7 @@
         var head = el('div', 'fb-team-name'),
           headLogo = logoNode(logoOfStatus(st, x.team.id), 28, true);
         if (headLogo) head.appendChild(headLogo);
-        head.appendChild(doc.createTextNode(x.team.name));
+        head.appendChild(doc.createTextNode(label(x.team.name)));
         box.appendChild(head);
         if (st.live)
           line(
@@ -694,8 +698,8 @@
                   : t('FT')
             )
           );
-          var homeCell = el('span', 'fb-home', m.home.name),
-            awayCell = el('span', 'fb-away', m.away.name),
+          var homeCell = el('span', 'fb-home', label(m.home.name)),
+            awayCell = el('span', 'fb-away', label(m.away.name)),
             hl = logoNode(m.home.logo, 28, true),
             al = logoNode(m.away.logo, 28, true);
           if (hl) homeCell.appendChild(hl);
@@ -858,7 +862,7 @@
         chips = el('div', 'fb-chips');
       espn.competitions.forEach(function (c) {
         var on = s.competitions.indexOf(c.id) >= 0,
-          b = mark(button('fb-chip fb-comp-chip', c.name), 'c:' + c.id);
+          b = mark(button('fb-chip fb-comp-chip', t(c.name)), 'c:' + c.id);
         pressed(b, on);
         b.onclick = function () {
           var now = store.get().competitions,
@@ -881,12 +885,12 @@
         followed.appendChild(el('div', 'fb-hint', t('No teams followed')));
       s.teams.forEach(function (x) {
         var b = mark(
-          button('fb-chip fb-followed selected', x.name + ' ✕'),
+          button('fb-chip fb-followed selected', label(x.name) + ' ✕'),
           'f:' + teamKey(x)
         );
         var fl = logoNode(followedLogo(x), 24, true);
         if (fl) b.insertBefore(fl, b.firstChild);
-        b.setAttribute('aria-label', t('Remove') + ' ' + x.name);
+        b.setAttribute('aria-label', t('Remove') + ' ' + label(x.name));
         b.setAttribute('aria-pressed', 'true');
         b.onclick = function () {
           message = '';
@@ -901,7 +905,7 @@
       var status = el('div', 'fb-status', message);
       followed.appendChild(status);
       s.competitions.forEach(function (c) {
-        var box = section(competitionName(c)),
+        var box = section(t(competitionName(c))),
           row = el('div', 'fb-chips');
         if (loaded[c]) {
           loaded[c].forEach(function (team) {
@@ -913,7 +917,7 @@
             )
               return;
             var b = mark(
-              button('fb-chip fb-team-chip', team.name),
+              button('fb-chip fb-team-chip', label(team.name)),
               't:' + teamKey(mine)
             );
             var tl = logoNode(team.logo, 24, true);
@@ -964,6 +968,7 @@
     refresh: refresh,
     idleLines: idleLines,
     landingItems: landingItems,
+    label: label,
     logoNode: function (url, size) {
       return logoNode(url, size, false);
     },

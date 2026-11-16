@@ -1,0 +1,64 @@
+{
+ "team": {
+  "id": "473"
+ },
+ "events": [
+  {
+   "id": "n4",
+   "date": "2026-11-20T19:45Z",
+   "name": "Romania at Bosnia",
+   "shortName": "HUL @ ARS",
+   "competitions": [
+    {
+     "id": "n4",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 300.0,
+      "displayClock": "0'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Full Time",
+       "detail": "x",
+       "shortDetail": "x"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "482",
+        "displayName": "Bosnia",
+        "shortDisplayName": "Bosnia"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "473",
+        "displayName": "Romania",
+        "shortDisplayName": "Romania",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/countries/500/rou.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
