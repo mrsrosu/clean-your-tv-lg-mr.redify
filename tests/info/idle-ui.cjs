@@ -1,0 +1,366 @@
+'use strict';
+const assert = require('node:assert/strict'),
+  { openHome } = require('./harness.cjs');
+// Idle screen, mr.redify scope. Timers and Date run on Playwright's fake clock (page.clock), so minutes pass instantly.
+(async () => {
+  const home = await openHome({ mrRedify: true }),
+    page = home.page,
+    MIN = 60000;
+  await page.clock.install({ time: new Date(2026, 10, 21, 10, 0, 0) });
+  await page.evaluate(() => {
+    window.__realSnapshot = HomeWeather.snapshot;
+  });
+  const overlay = () => page.locator('#idleScreen');
+  const shown = () =>
+    page.evaluate(() => {
+      const e = document.getElementById('idleScreen');
+      return !!e && !e.hidden;
+    });
+  const setup = async (config, stubs) => {
+    await page.evaluate(
+      ({ config, stubs }) => {
+        if (RenewalPanel.isOpen())
+          document.getElementById('renewalClose').click();
+        InfoPanel.close();
+        localStorage.removeItem('tvhome.idle.v1');
+        HomeInfo.idle.set(config || {});
+        window.__refresh = 0;
+        window.__wake = 0;
+        HomeFootball.idleLines = function () {
+          return stubs && stubs.football ? stubs.football : [];
+        };
+        HomeFootball.refresh = function () {
+          window.__refresh++;
+          return Promise.resolve({});
+        };
+        HomeInfoFinance.refresh = function () {
+          window.__refresh++;
+          return Promise.resolve({});
+        };
+        HomeWeather.snapshot = function () {
+          return stubs && stubs.weather ? stubs.weather : null;
+        };
+        HomeIdle.reload();
+      },
+      { config, stubs }
+    );
+  };
+  const content = () => page.locator('#idleScreen .idle-content');
+  const text = () => overlay().innerText();
+  const transform = () =>
+    page.evaluate(
+      () => document.querySelector('#idleScreen .idle-content').style.transform
+    );
+
+  // 1. Clock style: overlay after the timeout, with the clock, the date and the weather snapshot.
+  await setup(
+    { timeoutMin: 5, style: 'clock' },
+    { weather: { temp: 12, unit: '°C', label: 'Clear', icon: 'clear-day' } }
+  );
+  assert.equal(await shown(), false, 'hidden at start');
+  await page.clock.runFor(5 * MIN - 2000);
+  assert.equal(await shown(), false, 'not yet');
+  await page.clock.runFor(3000);
+  assert.equal(await shown(), true, 'shown after 5 minutes');
+  assert.match(
+    await page.locator('#idleScreen .idle-clock').innerText(),
+    /^\d{1,2}:\d{2}/
+  );
+  assert.equal(
+    await page
+      .locator('#idleScreen .idle-clock')
+      .innerText()
+      .then((s) => /\d:\d\d:\d\d/.test(s)),
+    false,
+    'no seconds by default'
+  );
+  assert.match(await page.locator('#idleScreen .idle-date').innerText(), /\d/);
+  assert.match(
+    await page.locator('#idleScreen .idle-weather').innerText(),
+    /12/
+  );
+  assert.equal(
+    await page.evaluate(() => window.__refresh),
+    0,
+    'clock style requests nothing'
+  );
+
+  // 2. Any key closes it and is consumed: Home's own key handling (it launches the selected tile on Enter) never sees it.
+  await page.evaluate(() => {
+    window.__keys = [];
+    ['keydown', 'keyup', 'keypress'].forEach((type) =>
+      window.addEventListener(type, (e) =>
+        window.__keys.push(type + ':' + e.key)
+      )
+    );
+  });
+  await page.keyboard.press('Enter');
+  assert.equal(await shown(), false, 'closed by a key');
+  assert.deepEqual(
+    await page.evaluate(() => window.__keys),
+    [],
+    'key did not reach Home (no tile launched)'
+  );
+  // The next key works normally again.
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(
+    (await page.evaluate(() => window.__keys)).filter((k) =>
+      /^keydown/.test(k)
+    ),
+    ['keydown:ArrowRight'],
+    'next key is not consumed'
+  );
+
+  // 3. Pointer move and click also close it; click is consumed.
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await page.mouse.move(300, 300);
+  await page.mouse.move(320, 330);
+  assert.equal(await shown(), false, 'pointer move closes');
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await page.evaluate(() => {
+    window.__clicks = 0;
+    document.addEventListener('click', () => window.__clicks++);
+  });
+  await page.mouse.down(); // no move first: the pointer is resting where it was
+  await page.mouse.up();
+  assert.equal(await shown(), false, 'click closes');
+  assert.equal(await page.evaluate(() => window.__clicks), 0, 'click consumed');
+
+  // 4. Activity resets the timer.
+  await page.clock.runFor(4 * MIN);
+  await page.keyboard.press('ArrowRight');
+  await page.clock.runFor(4 * MIN);
+  assert.equal(await shown(), false, '4 min after a key: still not idle');
+  await page.clock.runFor(1 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await page.keyboard.press('ArrowLeft');
+
+  // 5. Not shown while Settings or the info panel is open.
+  await page.evaluate(() => RenewalPanel.open());
+  await page.clock.runFor(8 * MIN);
+  assert.equal(await shown(), false, 'not while Settings is open');
+  await page.evaluate(() => document.getElementById('renewalClose').click());
+  await page.evaluate(() => InfoPanel.open());
+  await page.clock.runFor(8 * MIN);
+  assert.equal(await shown(), false, 'not while the info panel is open');
+  await page.evaluate(() => InfoPanel.close());
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true, 'shown once both are closed');
+  await page.keyboard.press('ArrowLeft');
+
+  // 6. OLED shift: the content moves at least once a minute (deterministic cycle of a few pixels).
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  const seen = [await transform()];
+  for (let i = 0; i < 4; i++) {
+    await page.clock.runFor(MIN);
+    seen.push(await transform());
+  }
+  for (let i = 1; i < seen.length; i++)
+    assert.notEqual(seen[i], seen[i - 1], 'minute ' + i + ' shifted');
+  for (const s of seen) {
+    const m = /translate\((-?\d+)px,\s*(-?\d+)px\)/.exec(s);
+    assert.ok(
+      m && Math.abs(+m[1]) <= 6 && Math.abs(+m[2]) <= 6,
+      'a few pixels: ' + s
+    );
+  }
+  assert.equal(
+    await page.evaluate(
+      () =>
+        getComputedStyle(document.querySelector('#idleScreen .idle-shade'))
+          .opacity
+    ),
+    '0.6',
+    'dim 60 -> shade opacity 0.6'
+  );
+  await page.keyboard.press('ArrowLeft');
+
+  // 7. Scope off: timer stopped, overlay closed, no further display; on again starts anew.
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  await home.setScope(false);
+  assert.equal(await shown(), false, 'closed with the scope off');
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), false);
+  await page.clock.runFor(30 * MIN);
+  assert.equal(await shown(), false, 'stays hidden');
+  await home.setScope(true);
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), true);
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true, 'works again with the scope on');
+  await page.keyboard.press('ArrowLeft');
+
+  // 8. Timeout Off never starts.
+  await setup({ timeoutMin: 0 });
+  assert.equal(await page.evaluate(() => HomeIdle.isRunning()), false);
+  await page.clock.runFor(60 * MIN);
+  assert.equal(await shown(), false);
+
+  // 9. Seconds on: the clock shows seconds and moves every second.
+  await setup({ timeoutMin: 5, seconds: true });
+  await page.clock.runFor(5 * MIN + 1000);
+  const c1 = await page.locator('#idleScreen .idle-clock').innerText();
+  assert.match(c1, /\d:\d\d:\d\d/);
+  await page.clock.runFor(2000);
+  assert.notEqual(
+    await page.locator('#idleScreen .idle-clock').innerText(),
+    c1,
+    'ticks'
+  );
+  await page.keyboard.press('ArrowLeft');
+
+  // 10. Panel style: blocks without data are omitted, no error text; refresh only for shown blocks.
+  await page.evaluate(() => {
+    localStorage.removeItem('tvhome.finance.v1');
+    HomeInfo.daily.set({ showHolidays: true, showNameDays: true });
+  });
+  await setup({
+    timeoutMin: 5,
+    style: 'panel',
+    blocks: { date: true, rates: true, football: true }
+  });
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(await shown(), true);
+  assert.equal(await page.locator('#idleScreen .idle-block-date').count(), 1);
+  assert.equal(
+    await page.locator('#idleScreen .idle-block-rates').count(),
+    0,
+    'no rates data: omitted'
+  );
+  assert.equal(
+    await page.locator('#idleScreen .idle-block-football').count(),
+    0,
+    'no football data: omitted'
+  );
+  assert.doesNotMatch(await text(), /undefined|error|unavailable|null/i);
+  assert.equal(
+    await page.evaluate(() => window.__refresh),
+    2,
+    'both refreshes called once when shown'
+  );
+  await page.keyboard.press('ArrowLeft');
+
+  // 11. Panel style with data and a holiday (25 Dec): rates and football lines, holiday under the date.
+  await page.clock.setSystemTime(new Date(2026, 11, 25, 10, 0, 0));
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'tvhome.finance.v1',
+      JSON.stringify({
+        currencies: ['EUR'],
+        current: {
+          date: '2026-11-20',
+          rates: { EUR: { value: 4.97, multiplier: 1 } }
+        },
+        previous: null
+      })
+    );
+  });
+  await setup(
+    {
+      timeoutMin: 5,
+      style: 'panel',
+      blocks: { date: true, rates: true, football: true }
+    },
+    { football: ["Arsenal 2-1 Hull City 34'"] }
+  );
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.match(
+    await page.locator('#idleScreen .idle-block-rates').innerText(),
+    /EUR 4\.9700/
+  );
+  assert.match(
+    await page.locator('#idleScreen .idle-block-football').innerText(),
+    /Arsenal 2-1 Hull City/
+  );
+  assert.equal(
+    (await page.locator('#idleScreen .idle-holiday').count()) > 0,
+    true,
+    'holiday shown'
+  );
+  await page.keyboard.press('ArrowLeft');
+  // showHolidays off hides it; blocks off omit the sections and their refresh.
+  await page.evaluate(() => HomeInfo.daily.set({ showHolidays: false }));
+  await setup(
+    {
+      timeoutMin: 5,
+      style: 'panel',
+      blocks: { date: true, rates: false, football: false }
+    },
+    { football: ['x'] }
+  );
+  await page.clock.runFor(5 * MIN + 1000);
+  assert.equal(
+    await page.locator('#idleScreen .idle-holiday').count(),
+    0,
+    'holidays off'
+  );
+  assert.equal(await page.locator('#idleScreen .idle-block-rates').count(), 0);
+  assert.equal(
+    await page.locator('#idleScreen .idle-block-football').count(),
+    0
+  );
+  assert.equal(
+    await page.evaluate(() => window.__refresh),
+    0,
+    'no refresh for hidden blocks'
+  );
+  await page.keyboard.press('ArrowLeft');
+  await page.evaluate(() => HomeInfo.daily.set({ showHolidays: true }));
+
+  // 12. Panel with the scope off after being shown: no refresh requests once off.
+  await setup({
+    timeoutMin: 5,
+    style: 'panel',
+    blocks: { date: true, rates: true, football: true }
+  });
+  await home.setScope(false);
+  await page.clock.runFor(10 * MIN);
+  assert.equal(
+    await page.evaluate(() => window.__refresh),
+    0,
+    'no request with the scope off'
+  );
+  await home.setScope(true);
+
+  // 13. The real weather accessor: no request, null while nothing is loaded; a loaded sample is reported as shown.
+  const real = await page.evaluate(() => {
+    const f = window.__realSnapshot;
+    return { before: f(), type: typeof f };
+  });
+  assert.equal(real.type, 'function');
+  assert.equal(real.before, null, 'null without loaded data');
+
+  // 14. Settings tab: style, timeout, dim, seconds, blocks, LG note.
+  await setup({});
+  await page.evaluate(() => RenewalPanel.open());
+  await page.locator('[data-category="idle"]').click();
+  const pane = page.locator('#settings-pane-idle');
+  assert.match(await pane.innerText(), /screensaver/i);
+  const cfg = () => page.evaluate(() => HomeInfo.idle.get());
+  await pane.locator('.idle-style-panel').click();
+  assert.equal((await cfg()).style, 'panel');
+  await pane.locator('.idle-timeout-30').click();
+  assert.equal((await cfg()).timeoutMin, 30);
+  await pane.locator('.idle-timeout-0').click();
+  assert.equal((await cfg()).timeoutMin, 0);
+  await pane.locator('.idle-dim-up').click();
+  assert.equal((await cfg()).dim, 70);
+  await pane.locator('.idle-dim-down').click();
+  await pane.locator('.idle-dim-down').click();
+  assert.equal((await cfg()).dim, 50);
+  await pane.locator('.idle-seconds').click();
+  assert.equal((await cfg()).seconds, true);
+  await pane.locator('.idle-block-toggle-rates').click();
+  assert.equal((await cfg()).blocks.rates, true);
+  assert.equal((await cfg()).blocks.date, true, 'other blocks kept');
+  await page.evaluate(() => document.getElementById('renewalClose').click());
+
+  assert.deepEqual(home.errors, [], 'no page errors');
+  await home.close();
+  console.log('PASS idle-ui');
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

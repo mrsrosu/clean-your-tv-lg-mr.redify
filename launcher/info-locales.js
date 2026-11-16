@@ -3,6 +3,16 @@ HomeI18n.add({
   'en': {},
   'ro': {
     'Idle screen': 'Ecran de repaus',
+    'Style': 'Stil',
+    'Clock': 'Ceas',
+    'Panel': 'Panou',
+    'Start after (minutes)': 'Pornește după (minute)',
+    'Darkness': 'Întunecare',
+    'Seconds': 'Secunde',
+    'Panel blocks': 'Blocurile panoului',
+    'Date': 'Data',
+    'The LG system screensaver is separate and only runs outside Home. Set its timeout longer than this one, or turn it off.':
+      'Economizorul de ecran al sistemului LG este separat și rulează doar în afara Home. Setează-i un timp mai lung decât al acestuia sau oprește-l.',
     'Rates & holidays': 'Cursuri și sărbători',
     'Calendar': 'Calendar',
     'Football': 'Fotbal',

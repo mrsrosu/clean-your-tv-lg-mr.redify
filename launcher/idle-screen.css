@@ -1,0 +1,126 @@
+/* Idle screen overlay (mr.redify only) and its Settings tab. */
+#idleScreen[hidden] {
+  display: none;
+}
+#idleScreen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9500;
+  overflow: hidden;
+  color: #f5f7fa;
+  font-family: Outfit, sans-serif;
+}
+/* While idle Home's own content is invisible (opacity, not visibility: the focused element keeps focus);
+   its background (the wallpaper) stays and is darkened by the shade. */
+body.idle-active #homeSurface > * {
+  opacity: 0;
+}
+#idleScreen .idle-shade {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: #000;
+}
+#idleScreen .idle-content {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+#idleScreen .idle-clock {
+  font-size: 260px;
+  font-weight: 300;
+  line-height: 1;
+}
+#idleScreen .idle-clock.idle-small {
+  font-size: 120px;
+}
+#idleScreen .idle-date {
+  font-size: 48px;
+  margin-top: 16px;
+}
+#idleScreen .idle-weather {
+  font-size: 44px;
+  margin-top: 24px;
+  opacity: 0.85;
+}
+#idleScreen .idle-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 48px;
+}
+#idleScreen .idle-block {
+  margin: 0 40px 24px;
+  min-width: 360px;
+  text-align: left;
+}
+#idleScreen .idle-block-title {
+  font-size: 30px;
+  opacity: 0.65;
+  margin-bottom: 8px;
+}
+#idleScreen .idle-line,
+#idleScreen .idle-holiday,
+#idleScreen .idle-nameday {
+  font-size: 34px;
+  padding: 2px 0;
+}
+#idleScreen .idle-block-date .idle-date {
+  margin-top: 0;
+  font-size: 38px;
+}
+#idleScreen .idle-holiday {
+  color: #ffd27f;
+}
+/* Settings tab */
+.idle-tab .idle-section {
+  margin-bottom: 24px;
+}
+.idle-tab .idle-section-title {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+.idle-tab button {
+  font-size: 24px;
+  padding: 10px 18px;
+  margin: 0 12px 10px 0;
+}
+.idle-tab button.selected {
+  border-color: #7fd1ff;
+  background: rgba(127, 209, 255, 0.25);
+}
+.idle-tab .idle-field {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+.idle-tab .idle-field-label {
+  display: inline-block;
+  min-width: 300px;
+  font-size: 24px;
+}
+.idle-tab .idle-dim-value {
+  display: inline-block;
+  min-width: 90px;
+  margin-right: 12px;
+  font-size: 24px;
+  text-align: center;
+}
+.idle-tab .idle-note {
+  margin: 8px 0;
+  max-width: 900px;
+  font-size: 22px;
+  opacity: 0.85;
+}

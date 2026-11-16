@@ -1051,6 +1051,19 @@
       const hide = !!region && offset > 0 && dock - offset < region.bottom + 24;
       doc.body.classList.toggle('weather-scrolled', hide);
     },
+    // Current conditions from the already loaded data (no request); null when nothing is loaded yet.
+    snapshot: function () {
+      const w = store.state().data;
+      if (!w || !Number.isFinite(w.temp)) return null;
+      const c = condition(w.code, w.isDay),
+        imperial = options.units === 'imperial';
+      return {
+        temp: Math.round(imperial ? (w.temp * 9) / 5 + 32 : w.temp),
+        unit: imperial ? '°F' : '°C',
+        label: t(c.label),
+        icon: c.icon || ''
+      };
+    },
     render: render
   };
 })(window);
