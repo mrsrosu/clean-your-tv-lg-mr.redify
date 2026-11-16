@@ -643,6 +643,7 @@
     if (info.registerTab)
       info.registerTab({
         id: 'calendar',
+        order: 30,
         label: 'Calendar',
         build: buildTab
       });

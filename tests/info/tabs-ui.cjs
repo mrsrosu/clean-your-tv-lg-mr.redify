@@ -48,6 +48,16 @@ const base = [
     const order = await page
       .locator('[role=tab]')
       .evaluateAll((a) => a.map((n) => n.dataset.category));
+    // Scoped tabs follow the spec order: Idle screen, Rates & holidays, Calendar, Football.
+    assert.deepEqual(
+      await page.evaluate(() => HomeInfo.tabs().map((t) => t.id)),
+      ['idle', 'daily', 'calendar', 'football']
+    );
+    assert.deepEqual(
+      order.filter((id) => ids.includes(id)),
+      ['idle', 'daily', 'calendar', 'football'],
+      'DOM order of the scoped tabs'
+    );
     assert.ok(order.indexOf('appearance') < order.indexOf('themes'));
     assert.ok(order.indexOf('themes') < order.indexOf('wallpapers'));
     // ArrowDown from the first tab reaches every tab, including the four scoped ones.

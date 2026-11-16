@@ -803,6 +803,7 @@
     if (info.registerTab)
       info.registerTab({
         id: 'football',
+        order: 40,
         label: 'Football',
         build: buildTab
       });

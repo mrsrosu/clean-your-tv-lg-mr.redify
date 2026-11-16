@@ -487,6 +487,7 @@
     if (info.registerTab)
       info.registerTab({
         id: 'daily',
+        order: 20,
         label: 'Rates & holidays',
         build: buildTab
       });

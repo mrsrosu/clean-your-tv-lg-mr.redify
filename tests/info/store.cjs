@@ -132,6 +132,19 @@ test('onScopeChange callback receives true then false when the ctv-scope event f
   assert.equal(ctx.HomeInfo.isMrRedify(), false);
   assert.deepEqual(seen, [true, false]);
 });
+test('tabs() sorts by the optional order field, registration order otherwise (M13)', () => {
+  const info = context(memory()).HomeInfo,
+    build = () => {};
+  info.registerTab({ id: 'f', label: 'F', build, order: 40 });
+  info.registerTab({ id: 'x', label: 'X', build });
+  info.registerTab({ id: 'c', label: 'C', build, order: 30 });
+  info.registerTab({ id: 'i', label: 'I', build, order: 10 });
+  info.registerTab({ id: 'y', label: 'Y', build });
+  assert.deepEqual(
+    info.tabs().map((t) => t.id),
+    ['i', 'c', 'f', 'x', 'y']
+  );
+});
 test('registerTab keeps registration order, replaces a same-id spec and ignores invalid specs', () => {
   const info = context(memory()).HomeInfo,
     build = () => {};

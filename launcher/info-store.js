@@ -69,8 +69,20 @@
       }
     tabSpecs.push(spec);
   }
+  // Optional spec.order sorts the tabs (smaller first; none = after the ordered ones, in registration order).
   function tabs() {
-    return tabSpecs.slice();
+    return tabSpecs
+      .map(function (spec, i) {
+        return { spec: spec, i: i };
+      })
+      .sort(function (a, b) {
+        const x = typeof a.spec.order === 'number' ? a.spec.order : Infinity,
+          y = typeof b.spec.order === 'number' ? b.spec.order : Infinity;
+        return x === y ? a.i - b.i : x < y ? -1 : 1;
+      })
+      .map(function (e) {
+        return e.spec;
+      });
   }
   info.registerTab = registerTab;
   info.tabs = tabs;
