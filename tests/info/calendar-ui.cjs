@@ -124,6 +124,8 @@ const assert = require('node:assert/strict'),
   assert.match(await cls(12), /selected/);
   await page.keyboard.press('ArrowRight'); // next page: exchange rates
   assert.equal(await page.locator('#infoPanel .fin-page').isVisible(), true);
+  await page.keyboard.press('ArrowRight'); // then football
+  assert.equal(await page.locator('#infoPanel .fb-page').isVisible(), true);
   await page.keyboard.press('ArrowRight');
   assert.equal(
     await page.evaluate(
@@ -133,6 +135,7 @@ const assert = require('node:assert/strict'),
     ),
     'page-zz'
   );
+  await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft'); // back to the calendar
   assert.equal(await page.locator('#infoPanel .cal-grid').isVisible(), true);

@@ -66,6 +66,21 @@ HomeI18n.add({
     'Holidays': 'Sărbători',
     'Name days': 'Onomastici',
     'Keep at least one currency': 'Păstrează cel puțin o monedă',
-    'At most 8 currencies': 'Cel mult 8 monede'
+    'At most 8 currencies': 'Cel mult 8 monede',
+    'Followed teams': 'Echipe urmărite',
+    "Today's matches": 'Meciurile de azi',
+    'No matches today': 'Niciun meci azi',
+    'No matches found': 'Niciun meci găsit',
+    'Choose teams in Settings': 'Alege echipele în Setări',
+    'No teams followed': 'Nicio echipă urmărită',
+    'Next': 'Urmează',
+    'Last': 'Ultimul',
+    'Live': 'Live',
+    'Competitions': 'Competiții',
+    'Remove': 'Elimină',
+    'Loading teams…': 'Se încarcă echipele…',
+    'Teams unavailable': 'Echipele nu sunt disponibile',
+    'At most 5 teams': 'Cel mult 5 echipe',
+    'Football data unavailable': 'Datele de fotbal nu sunt disponibile'
   }
 });

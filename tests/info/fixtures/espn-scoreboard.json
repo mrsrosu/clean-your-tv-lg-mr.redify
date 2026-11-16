@@ -1,0 +1,185 @@
+{
+ "day": {
+  "date": "2026-11-21"
+ },
+ "events": [
+  {
+   "id": "401879233",
+   "date": "2026-11-21T12:30Z",
+   "name": "Fulham at Manchester City",
+   "shortName": "FUL @ MNC",
+   "competitions": [
+    {
+     "id": "401879233",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0'",
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sat, November 21st at 7:30 AM EST",
+       "shortDetail": "Scheduled"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "id": "382",
+        "displayName": "Manchester City",
+        "shortDisplayName": "Man City"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "370",
+        "displayName": "Fulham",
+        "shortDisplayName": "Fulham"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401879238",
+   "date": "2026-11-21T15:00Z",
+   "name": "Nottingham Forest at AFC Bournemouth",
+   "shortName": "NFO @ BOU",
+   "competitions": [
+    {
+     "id": "401879238",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0'",
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sat, November 21st at 10:00 AM EST",
+       "shortDetail": "Scheduled"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "id": "349",
+        "displayName": "AFC Bournemouth",
+        "shortDisplayName": "Bournemouth"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "393",
+        "displayName": "Nottingham Forest",
+        "shortDisplayName": "Nottm Forest"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878758",
+   "date": "2026-11-07T12:30Z",
+   "name": "Tottenham Hotspur at Leeds United",
+   "shortName": "TOT @ LEE",
+   "competitions": [
+    {
+     "id": "401878758",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "team": {
+        "id": "357",
+        "displayName": "Leeds United",
+        "shortDisplayName": "Leeds"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "367",
+        "displayName": "Tottenham Hotspur",
+        "shortDisplayName": "Spurs"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878760",
+   "date": "2026-11-07T15:00Z",
+   "name": "Hull City at Arsenal",
+   "shortName": "HUL @ ARS",
+   "competitions": [
+    {
+     "id": "401878760",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "306",
+        "displayName": "Hull City",
+        "shortDisplayName": "Hull"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

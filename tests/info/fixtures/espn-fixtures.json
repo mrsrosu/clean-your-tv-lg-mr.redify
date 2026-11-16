@@ -1,0 +1,146 @@
+{
+ "team": {
+  "id": "359",
+  "displayName": "Arsenal"
+ },
+ "events": [
+  {
+   "id": "401879232",
+   "date": "2026-11-21T17:30Z",
+   "name": "Arsenal at Newcastle United",
+   "shortName": "ARS @ NEW",
+   "competitions": [
+    {
+     "id": "401879232",
+     "status": {
+      "clock": 0.0,
+      "addedClock": 0.0,
+      "displayClock": "0'",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sat, November 21st at 12:30 PM EST",
+       "shortDetail": "11/21 - 12:30 PM EST"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": null,
+       "team": {
+        "id": "361",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": null,
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878753",
+   "date": "2026-11-29T16:30Z",
+   "name": "Manchester City at Arsenal",
+   "shortName": "MNC @ ARS",
+   "competitions": [
+    {
+     "id": "401878753",
+     "status": {
+      "clock": 0.0,
+      "addedClock": 0.0,
+      "displayClock": "0'",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Sun, November 29th at 11:30 AM EST",
+       "shortDetail": "11/29 - 11:30 AM EST"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": null,
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": null,
+       "team": {
+        "id": "382",
+        "displayName": "Manchester City",
+        "shortDisplayName": "Man City"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878750",
+   "date": "2026-12-02T20:15Z",
+   "name": "Arsenal at Brentford",
+   "shortName": "ARS @ BRE",
+   "competitions": [
+    {
+     "id": "401878750",
+     "status": {
+      "clock": 0.0,
+      "addedClock": 0.0,
+      "displayClock": "0'",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Wed, December 2nd at 3:15 PM EST",
+       "shortDetail": "12/2 - 3:15 PM EST"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": null,
+       "team": {
+        "id": "337",
+        "displayName": "Brentford",
+        "shortDisplayName": "Brentford"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": null,
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

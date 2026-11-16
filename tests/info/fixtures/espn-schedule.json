@@ -1,0 +1,164 @@
+{
+ "team": {
+  "id": "359",
+  "displayName": "Arsenal"
+ },
+ "events": [
+  {
+   "id": "401878760",
+   "date": "2026-11-07T15:00Z",
+   "name": "Hull City at Arsenal",
+   "shortName": "HUL @ ARS",
+   "competitions": [
+    {
+     "id": "401878760",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 300.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "306",
+        "displayName": "Hull City",
+        "shortDisplayName": "Hull"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401879246",
+   "date": "2026-11-01T16:30Z",
+   "name": "Arsenal at Liverpool",
+   "shortName": "ARS @ LIV",
+   "competitions": [
+    {
+     "id": "401879246",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 420.0,
+      "displayClock": "90'+7'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "364",
+        "displayName": "Liverpool",
+        "shortDisplayName": "Liverpool"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878768",
+   "date": "2026-10-24T14:00Z",
+   "name": "Everton at Arsenal",
+   "shortName": "EVE @ ARS",
+   "competitions": [
+    {
+     "id": "401878768",
+     "status": {
+      "clock": 5400.0,
+      "addedClock": 480.0,
+      "displayClock": "90'+8'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": {
+        "value": 2.0,
+        "displayValue": "2"
+       },
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "368",
+        "displayName": "Everton",
+        "shortDisplayName": "Everton"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

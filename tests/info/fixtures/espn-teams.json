@@ -1,0 +1,55 @@
+{
+ "sports": [
+  {
+   "leagues": [
+    {
+     "slug": "eng.1",
+     "teams": [
+      {
+       "team": {
+        "id": "349",
+        "displayName": "AFC Bournemouth",
+        "abbreviation": "BOU"
+       }
+      },
+      {
+       "team": {
+        "id": "359",
+        "displayName": "Arsenal",
+        "abbreviation": "ARS"
+       }
+      },
+      {
+       "team": {
+        "id": "362",
+        "displayName": "Aston Villa",
+        "abbreviation": "AVL"
+       }
+      },
+      {
+       "team": {
+        "id": "337",
+        "displayName": "Brentford",
+        "abbreviation": "BRE"
+       }
+      },
+      {
+       "team": {
+        "id": "331",
+        "displayName": "Brighton & Hove Albion",
+        "abbreviation": "BHA"
+       }
+      },
+      {
+       "team": {
+        "id": "363",
+        "displayName": "Chelsea",
+        "abbreviation": "CHE"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
