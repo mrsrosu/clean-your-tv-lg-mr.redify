@@ -13,10 +13,17 @@
   color: #f5f7fa;
   font-family: Outfit, sans-serif;
 }
-/* While idle Home's own content is invisible (opacity, not visibility: the focused element keeps focus);
-   its background (the wallpaper) stays and is darkened by the shade. */
-body.idle-active #homeSurface > * {
-  opacity: 0;
+/* While idle nothing of Home shows, at any dim level: !important because the app name, tiles and others carry inline
+   opacity / visibility set by app.js, which beats a plain rule (the focused app's name used to show through). Opacity
+   and visibility both, so a child that sets its own visibility cannot reappear. They are properties, not display: the
+   layout and Home's focus state are kept. The wallpaper (Home's background) stays and is darkened by the shade; the
+   dim level only changes that shade. #homeWeather is listed because it may live outside the surface's direct children. */
+body.idle-active #homeSurface > *,
+body.idle-active #homeWeather,
+body.idle-active #hero,
+body.idle-active #landingWidgets {
+  opacity: 0 !important;
+  visibility: hidden !important;
 }
 #idleScreen .idle-shade {
   position: absolute;

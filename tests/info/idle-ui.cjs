@@ -511,6 +511,65 @@ const assert = require('node:assert/strict'),
   assert.equal(fromBad.style, 'clock');
   assert.equal(fromBad.blocks.date, true);
 
+  // 19. Nothing of Home shows through the idle screen, whatever the style and the dim level: the app name (its inline
+  // opacity used to beat the stylesheet), header buttons, tiles, dock band, landing widgets and the weather block.
+  await page.addStyleTag({ content: '*{transition:none !important}' }); // read settled values
+  const homeParts = ['#hero', '#topButtons', 'header', '#viewport', '#dockBand', '#landingWidgets', '#homeWeather'];
+  const partStates = () =>
+    page.evaluate((sels) => {
+      const out = {};
+      sels.forEach((sel) => {
+        const e = document.querySelector(sel);
+        if (!e) return;
+        // Effective opacity along the ancestors, and visibility.
+        let o = 1;
+        for (let n = e; n && n !== document.documentElement; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity);
+        out[sel] = { opacity: o, visibility: getComputedStyle(e).visibility };
+      });
+      return out;
+    }, homeParts);
+  for (const style of ['clock', 'panel'])
+    for (const dim of [0, 60, 100]) {
+      await setup({ timeoutMin: 5, style, dim });
+      await page.evaluate(() => {
+        const hero = document.getElementById('hero'),
+          w = document.getElementById('homeWeather');
+        hero.textContent = 'Netflix';
+        hero.style.opacity = '1'; // as app.js sets it for the focused app
+        w.hidden = false;
+        w.style.left = '112px';
+        w.style.top = '240px';
+        w.style.width = '600px';
+        w.style.height = '200px';
+        HomeInfo.calendar.set({ landing: true });
+        window.__focusBefore = document.activeElement && (document.activeElement.id || document.activeElement.tagName);
+      });
+      const before = await partStates();
+      assert.ok(before['#hero'].opacity === 1 && before['#hero'].visibility === 'visible', 'visible before idle: ' + JSON.stringify(before['#hero']));
+      await page.clock.runFor(5 * MIN + 2000);
+      assert.equal(await shown(), true, 'idle shown (' + style + '/' + dim + ')');
+      const during = await partStates();
+      for (const sel of homeParts)
+        if (during[sel])
+          assert.ok(
+            during[sel].opacity === 0 || during[sel].visibility === 'hidden',
+            sel + ' shows through the idle screen (' + style + '/' + dim + '): ' + JSON.stringify(during[sel])
+          );
+      assert.equal(during['#hero'].opacity, 0, 'app name hidden');
+      assert.equal(during['#hero'].visibility, 'hidden');
+      await page.keyboard.press('ArrowLeft'); // wakes, consumed
+      assert.equal(await shown(), false, 'woke');
+      const after = await partStates();
+      assert.equal(after['#hero'].opacity, 1, 'app name back after wake');
+      assert.equal(after['#hero'].visibility, 'visible');
+      assert.equal(after['#topButtons'].visibility, 'visible');
+      assert.equal(
+        await page.evaluate(() => document.activeElement && (document.activeElement.id || document.activeElement.tagName)),
+        await page.evaluate(() => window.__focusBefore),
+        'focus unchanged by the idle screen'
+      );
+    }
+
   assert.deepEqual(home.errors, [], 'no page errors');
   await home.close();
   console.log('PASS idle-ui');
