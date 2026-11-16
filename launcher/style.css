@@ -212,6 +212,15 @@ body.scrolled header {
 #homeSurface.ctv-mr-redify #topButtons .pill svg {
   margin-right: 0;
 }
+/* The installed theme colours only the input, network and settings glyphs; give the calendar glyph the same
+   light-on-glass colour and, when focused (pill turns white), the dark one the theme uses for focused pills. */
+#homeSurface.ctv-mr-redify #topButtons .pill svg.ctv-info-icon {
+  color: #fff;
+  fill: currentColor;
+}
+#homeSurface.ctv-mr-redify #topButtons .pill.focused svg.ctv-info-icon {
+  color: #0b0d18;
+}
 #homeSurface.ctv-mr-redify #topButtons .pill > span {
   display: none;
 }
