@@ -14,8 +14,8 @@ tab in **Settings**, so that anyone who installs this fork gets what the owner h
 4. **Football** (teams and competitions).
 
 Target TV: LG OLED55C22LB, webOS 26, No-root edition (Home `com.gathin.tvhome`,
-Home Helper service `com.gathin.tvhome.renewal`). Language of the UI follows the
-existing Home i18n; Romanian content (holidays, name days) is Romanian only.
+Home Helper service `com.gathin.tvhome.renewal`). Romanian is added as a Home UI
+language (see "Romanian language"); holidays and name days are Romanian content.
 
 ## Decisions taken with the owner
 
@@ -30,6 +30,7 @@ existing Home i18n; Romanian content (holidays, name days) is Romanian only.
 | Where it is viewed | One new header button (calendar icon) opens a **full-screen panel with three pages**: Calendar, Exchange rate, Football (left/right to switch). |
 | Distribution | Public fork `mrsrosu/clean-your-tv-lg-mr.redify`. The theme repo `cytv-themes-mr-redify` stays as is. |
 | Scope | **Only the mr.redify theme** (owner decision, 2026-11-16). Other themes behave exactly as upstream. |
+| Language | Add **Romanian (`ro`)** as a full Home UI language. New texts are written in Romanian and translated to English; the other 11 languages fall back to English for the new texts. |
 
 Assumption to confirm in review (not yet answered by the owner):
 - Info panel blocks default to on for date/name day, off for exchange rate and football
@@ -178,6 +179,30 @@ the TV web engine is older than desktop Chrome.
 Other countries or languages for holidays and name days, Google Calendar, event sync
 with a phone, football standings, Liga 1 standings, BNR in the Root edition,
 notifications or alarms.
+
+## Romanian language
+
+- `ro` is added to the language list in `launcher/i18n.js` and gets a translation of
+  **every existing Home string** (about 400 strings across `catalogs.js`,
+  `theme-locales.js`, `wallpaper-locales.js`, `weather-locales.js`), so the Home
+  menus, settings and themes are fully Romanian, not a mix.
+- A language is not a theme feature, so Romanian appears in the language choice for
+  every theme. With "Automatic (system language)" a TV set to Romanian switches Home
+  to Romanian after the update.
+- New feature texts live in one new file, `launcher/info-locales.js`, with English keys
+  and Romanian values (`HomeI18n.add`), following `weather-locales.js`.
+- Trade-off: the shared locale files change, so later merges from upstream may conflict
+  there; accepted by the owner.
+- `docs/i18n/ro.md` (the user manual) is added only if an existing test requires a
+  document per language.
+
+## Later (owner decision, 2026-11-16)
+
+- **Live TV preview spike**, at the very end: a small test build on the TV, installed
+  only with the owner's approval, that tries the tuner in a `<video>` with sound.
+  If it works, it becomes a task; if not, the answer is recorded. Today Home previews
+  only HDMI inputs (`service/webos-external`), and only on themes with an input shelf,
+  so mr.redify has no input previews either.
 
 ## Risks
 

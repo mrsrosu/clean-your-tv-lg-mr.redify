@@ -13,7 +13,8 @@
 ## Global Constraints
 
 - Scope: everything is active **only while the mr.redify theme is active** (class `ctv-mr-redify` on `#homeSurface`, set in `launcher/theme-runtime.js`). On any other theme: no tabs, no header button, idle timer stopped, no network requests.
-- Romania only for holidays and name days; bundled offline; Romanian content text. UI labels are English strings through `HomeI18n.t(...)` (Home has no `ro` language; unknown strings fall back to English).
+- Romania only for holidays and name days; bundled offline; Romanian content text.
+- Language: Romanian (`ro`) is added to Home (Task 0). Every new UI text goes through `HomeI18n.t('<English text>')` with the English text as key; the Romanian value lives in `launcher/info-locales.js` (`HomeI18n.add({ en: {...}, ro: {...} })`). Other languages fall back to English. Never hard-code a user-visible string outside `info-locales.js`.
 - Idle timeout choices: Off / 5 / 10 / 30 minutes, default 10. Styles: `clock` (big clock + date + weather) and `panel` (info panel with per-block toggles).
 - Own events: maximum 50. Favourite teams: 1 to 5. BNR default currencies: EUR, USD, GBP, CHF.
 - BNR source: `https://curs.bnr.ro/nbrfxrates.xml` (never `www.bnr.ro`, it redirects to the home page). Service method host and path are fixed; the caller sends no destination.
@@ -35,6 +36,7 @@
 ## File Structure
 
 ```
+launcher/info-locales.js      en + ro texts of all new features (Task 0 creates, later tasks add keys)
 launcher/info-store.js        HomeInfo: scope signal, createStore, registerTab/tabs
 launcher/info-fetch.js        HomeInfoFetch: http(), cached()
 launcher/ro-calendar-data.js  HomeRoCalendar: pure Easter, holidays, name days
@@ -51,6 +53,27 @@ tests/info/*.cjs              tests; tests/info/fixtures/ recorded responses
 Modified: `launcher/index.html`, `launcher/app.js`, `launcher/theme-runtime.js`, `launcher/settings-categories.js`, `launcher/renewal-panel.js`, `renewal-service/service.js`, `scripts/home_assets.py`, `scripts/build-cytv.py` (only if it lists service files explicitly), `package.json`, `scripts/test.sh`, `MR-REDIFY.md`.
 
 ---
+
+### Task 0: Romanian language
+
+**Files:**
+- Modify: `launcher/i18n.js` (language list line ~14), `launcher/catalogs.js`, `launcher/theme-locales.js`, `launcher/wallpaper-locales.js`, `launcher/weather-locales.js`, `launcher/settings-categories.js` (the `labels` map near line 4), `launcher/i18n.css` only if a font rule is needed (Romanian is Latin script: expected none)
+- Create: `launcher/info-locales.js` (empty `HomeI18n.add({ en: {}, ro: {} })`), `tests/info/ro-locale.cjs`
+- Modify: `launcher/index.html`, `scripts/home_assets.py`
+- Create `docs/i18n/ro.md` only if `tests/i18n/*.cjs` or `scripts/ci-scope.py` requires one document per language
+
+**Interfaces:**
+- Produces: language code `ro` (name `Română`) selectable in Settings > Language and chosen by "Automatic (system language)" for `ro`/`ro-RO`; `info-locales.js` is the single place later tasks add `en`/`ro` pairs.
+
+- [ ] **Step 1: Write failing tests** `tests/info/ro-locale.cjs`:
+  - `ro is in the language list and normalize('ro-RO') returns 'ro'`
+  - `every English key in catalogs.js, theme-locales.js, wallpaper-locales.js and weather-locales.js has a ro value` (same key sets as `en`, read from the files)
+  - `ro values keep the {placeholders} of their English source`
+  - `HomeI18n.t('Settings') returns the Romanian text when ro is active`
+- [ ] **Step 2:** Run `node tests/info/ro-locale.cjs`. Expected: FAIL.
+- [ ] **Step 3:** Add `{ code: 'ro', name: 'Română' }` to the language list, add a `'ro'` block in every locale file next to the other languages (translate each string; keep product names and technical terms such as Developer Mode, Wi-Fi, HDMI, Home Helper, webOS in their original form), add `ro` labels for the two special labels in `settings-categories.js`.
+- [ ] **Step 4:** Run `node tests/info/ro-locale.cjs && for f in tests/i18n/*.cjs; do node $f; done && npm run lint:compat`. Expected: PASS. Ask the owner to skim 15 translated strings (menus and settings) before committing.
+- [ ] **Step 5:** Commit `feat(i18n): add Romanian language`.
 
 ### Task 1: Scope signal and settings store
 
@@ -261,6 +284,14 @@ Modified: `launcher/index.html`, `launcher/app.js`, `launcher/theme-runtime.js`,
 - [ ] **Step 1:** Run `npm run test:info && npm run test:info:browser && npm run lint:compat && npm run test:themes && npm run test:themes:browser && bash scripts/test.sh`. Expected: PASS everywhere. Fix routing failures in the CI scope files and rerun.
 - [ ] **Step 2:** Rebuild and restart the preview on `http://127.0.0.1:8766`: re-export the runtime with `scripts/export-theme-runtime.py --allow-dirty` into the toolkit as done for earlier theme work; check the four tabs, the header button, the three pages and the idle overlay with the mr.redify theme, and check that Classic shows none of them.
 - [ ] **Step 3:** Update `MR-REDIFY.md`; commit `docs: describe info features`. Do not push; report to the owner and ask before any install on the TV or push.
+
+### Task 11 (deferred, owner decision): Live TV preview feasibility spike
+
+Done last, after Task 10 and only on the owner's go-ahead. Output is an answer, not shipped code.
+
+- [ ] **Step 1:** Ask the owner for approval to install a small test build on the TV (and to extend Developer Mode first if needed).
+- [ ] **Step 2:** Test build tries the tuner in a `<video>` (candidate source types for the broadcast plane) with sound, releasing it with the release order used in `launcher/input-preview.js`; log what webOS allows and whether sound persists after leaving Home.
+- [ ] **Step 3:** Record the result in the spec. If it works, write a follow-up plan (preview on focus of the Live TV tile, mute policy, themes without shelf); if not, document why and stop.
 
 ---
 
