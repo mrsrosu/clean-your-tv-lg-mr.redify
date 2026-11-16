@@ -125,14 +125,18 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
     );
     assert.equal(await page.locator('#infoPanel .fin-row').count(), 0);
   }
-  // Root edition: no bnrRates, same message, no call.
+  // Root edition: the info panel stays closed (scope off) and the transport still makes no bnrRates call.
   await setup(good);
-  await page.evaluate(() => (window.ROOT_VERSION = '1'));
-  await openRates();
-  await page.waitForFunction(() =>
-    /update required/i.test(
-      document.querySelector('#infoPanel .fin-page').innerText
-    )
+  await page.evaluate(() => {
+    InfoPanel.close();
+    localStorage.removeItem('tvhome.cache.v1.bnr');
+    window.ROOT_VERSION = '1';
+  });
+  await page.evaluate(() => InfoPanel.open());
+  assert.equal(await page.evaluate(() => InfoPanel.isOpen()), false);
+  assert.equal(
+    await page.evaluate(() => HomeInfoFinance.refresh().then((r) => r.state)),
+    'update-required'
   );
   assert.equal(
     await page.evaluate(
