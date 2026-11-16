@@ -803,13 +803,13 @@
     if (info.registerTab)
       info.registerTab({
         id: 'football',
-        label: t('Football'),
+        label: 'Football',
         build: buildTab
       });
     if (root.InfoPanel)
       root.InfoPanel.registerPage({
         id: 'football',
-        label: t('Football'),
+        label: 'Football',
         render: function (container) {
           host = container;
           host.classList.add('fb-page');

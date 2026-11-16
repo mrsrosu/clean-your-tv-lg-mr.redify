@@ -641,7 +641,7 @@
       else stop();
     });
   if (info.registerTab)
-    info.registerTab({ id: 'idle', label: t('Idle screen'), build: buildTab });
+    info.registerTab({ id: 'idle', label: 'Idle screen', build: buildTab });
   info.idle = store;
   root.HomeIdle = {
     createController: createIdleController,

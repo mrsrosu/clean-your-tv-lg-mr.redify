@@ -133,6 +133,28 @@ const assert = require('node:assert/strict'),
   await empty.page.evaluate(() => InfoPanel.close());
   assert.deepEqual(empty.errors, [], 'empty page errors');
   await empty.close();
+  // M4: labels are translated when rendered/opened (language known only after the scripts ran).
+  const ro = await openHome({ mrRedify: true });
+  await ro.page.evaluate(() => {
+    localStorage.setItem('tvhome.language', 'ro');
+    HomeI18n.refresh();
+    InfoPanel.open();
+  });
+  const tabTexts = await ro.page
+    .locator('#infoPanel .info-tab')
+    .allInnerTexts();
+  assert.ok(tabTexts.includes('Fotbal'), 'ro tab label: ' + tabTexts);
+  assert.equal(
+    await ro.page.locator('#btnInfo').getAttribute('aria-label'),
+    'Informații'
+  );
+  assert.equal(await ro.page.locator('#btnInfo').getAttribute('title'), 'Informații');
+  await ro.page.evaluate(() => {
+    InfoPanel.close();
+    localStorage.removeItem('tvhome.language');
+    HomeI18n.refresh();
+  });
+  await ro.close();
   // Root edition: the panel never opens and the button stays hidden, even with the theme class on.
   const rootHome = await openHome({ mrRedify: true, edition: 'root-launcher' });
   await rootHome.page.evaluate(() => InfoPanel.open());

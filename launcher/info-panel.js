@@ -25,7 +25,7 @@
       const tab = el('button', 'info-tab');
       tab.type = 'button';
       tab.tabIndex = -1;
-      tab.textContent = spec.label;
+      tab.textContent = t(spec.label); // spec.label is the English key, translated when rendered
       tab.addEventListener('click', function () {
         show(i);
       });
@@ -58,9 +58,18 @@
       if (spec.onShow) spec.onShow();
     } catch (_) {}
   }
+  // Texts translated when used: the language may be detected after this script ran (HomeI18n.ready).
+  function labels() {
+    if (empty) empty.textContent = t('Nothing to show yet');
+    if (button) {
+      button.setAttribute('aria-label', t('Info'));
+      button.title = t('Info');
+    }
+  }
   function open() {
     if (opened || !panel || !isActive()) return;
     opened = true;
+    labels();
     // Pages registered after the first open appear too.
     current = -1;
     pages.forEach(function (spec) {
@@ -89,6 +98,7 @@
   }
   function applyScope() {
     const on = isActive();
+    labels();
     if (button) button.hidden = !on;
     if (!on) close();
   }
@@ -110,9 +120,8 @@
     tabs = panel.querySelector('.info-tabs');
     body = panel.querySelector('.info-body');
     empty = panel.querySelector('.info-empty');
-    empty.textContent = t('Nothing to show yet');
-    button.setAttribute('aria-label', t('Info'));
-    button.title = t('Info');
+    labels();
+    if (root.HomeI18n && root.HomeI18n.ready) root.HomeI18n.ready(labels);
     // Capture, like the Settings panel: while open, Home's own handlers never see the key.
     doc.addEventListener('keydown', onKey, true);
     if (root.HomeInfo) root.HomeInfo.onScopeChange(applyScope);

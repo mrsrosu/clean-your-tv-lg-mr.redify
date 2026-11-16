@@ -487,13 +487,13 @@
     if (info.registerTab)
       info.registerTab({
         id: 'daily',
-        label: t('Rates & holidays'),
+        label: 'Rates & holidays',
         build: buildTab
       });
     if (root.InfoPanel)
       root.InfoPanel.registerPage({
         id: 'finance',
-        label: t('Exchange rates'),
+        label: 'Exchange rates',
         render: function (container) {
           host = container;
           host.classList.add('fin-page');

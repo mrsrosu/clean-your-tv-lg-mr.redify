@@ -643,13 +643,13 @@
     if (info.registerTab)
       info.registerTab({
         id: 'calendar',
-        label: t('Calendar'),
+        label: 'Calendar',
         build: buildTab
       });
     if (root.InfoPanel)
       root.InfoPanel.registerPage({
         id: 'calendar',
-        label: t('Calendar'),
+        label: 'Calendar',
         render: function (container) {
           host = container;
           host.classList.add('cal-page');
