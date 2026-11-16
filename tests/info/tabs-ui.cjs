@@ -11,7 +11,32 @@ const base = [
   'advanced'
 ];
 (async () => {
-  // The root edition has its own settings panel and does not load the info modules.
+  // Root edition (ROOT_VERSION set): the info modules are packaged but stay inert even with mr.redify on:
+  // no scope, no Settings tabs, no header button, no idle timer.
+  {
+    const home = await openHome({ mrRedify: true, edition: 'root-launcher' }),
+      page = home.page;
+    const state = await page.evaluate(() => ({
+      root: !!window.ROOT_VERSION,
+      scope: HomeInfo.isMrRedify(),
+      idle: HomeIdle.isRunning(),
+      button: !document.getElementById('btnInfo').hidden
+    }));
+    assert.equal(state.root, true, 'root edition');
+    assert.equal(state.scope, false, 'root: scope never on');
+    assert.equal(state.idle, false, 'root: no idle timer');
+    assert.equal(state.button, false, 'root: no Info button');
+    await page.evaluate(() => RenewalPanel.open());
+    for (const id of ids)
+      assert.equal(
+        await page.locator('[data-category="' + id + '"]').isVisible(),
+        false,
+        'root: no ' + id + ' tab'
+      );
+    assert.deepEqual(home.errors, [], 'root page errors');
+    await home.close();
+    console.log('PASS root-launcher');
+  }
   for (const edition of ['launcher']) {
     const home = await openHome({ mrRedify: true, edition }),
       page = home.page,

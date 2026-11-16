@@ -4,7 +4,9 @@
   const doc = root.document,
     info = root.HomeInfo || (root.HomeInfo = {}),
     listeners = [];
+  // The Root edition has its own Settings panel without the info tabs: the features stay off there.
   function isMrRedify() {
+    if (root.ROOT_VERSION) return false;
     const surface = doc.getElementById('homeSurface');
     return !!(surface && surface.classList.contains('ctv-mr-redify'));
   }

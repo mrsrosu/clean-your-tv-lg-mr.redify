@@ -133,6 +133,17 @@ const assert = require('node:assert/strict'),
   await empty.page.evaluate(() => InfoPanel.close());
   assert.deepEqual(empty.errors, [], 'empty page errors');
   await empty.close();
+  // Root edition: the panel never opens and the button stays hidden, even with the theme class on.
+  const rootHome = await openHome({ mrRedify: true, edition: 'root-launcher' });
+  await rootHome.page.evaluate(() => InfoPanel.open());
+  assert.equal(
+    await rootHome.page.evaluate(() => InfoPanel.isOpen()),
+    false,
+    'root: panel does not open'
+  );
+  assert.equal(await rootHome.page.locator('#btnInfo').isVisible(), false);
+  assert.deepEqual(rootHome.errors, [], 'root page errors');
+  await rootHome.close();
   console.log('PASS panel');
 })().catch((e) => {
   console.error(e);
