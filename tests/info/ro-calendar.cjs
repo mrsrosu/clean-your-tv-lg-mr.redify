@@ -58,4 +58,27 @@ days.forEach((n, i) => {
   }
 });
 assert(Array.isArray(C.nameDays(2026, 13, 40)));
+
+// nextNameDay: the next day (day by day, up to 366 days) that has name days, movable ones included.
+const nd = (y, m, d) => C.nextNameDay(y, m, d);
+assert.deepEqual(nd(2026, 11, 16), { year: 2026, month: 11, day: 25, names: ['Ecaterina', 'Cătălina', 'Cătălin'] }, 'after Matei (today has names: still the NEXT day)');
+assert.deepEqual(nd(2026, 11, 7), { year: 2026, month: 11, day: 8, names: ['Mihail', 'Mihai', 'Mihaela', 'Gabriel', 'Gabriela'] }, 'tomorrow');
+assert.equal(nd(2026, 11, 28).day, 30, 'month wrap inside the year');
+assert.deepEqual([nd(2026, 12, 27).year, nd(2026, 12, 27).month, nd(2026, 12, 27).day], [2027, 1, 1], 'year wrap');
+assert.deepEqual([nd(2026, 12, 31).year, nd(2026, 12, 31).month, nd(2026, 12, 31).day], [2027, 1, 1]);
+assert.deepEqual([nd(2026, 1, 31).month, nd(2026, 1, 31).day], [2, 1], 'month wrap');
+// Movable: Florii (Palm Sunday, Easter 12 April 2026 -> 5 April) comes before 23 April.
+const fl = nd(2026, 4, 4);
+assert.deepEqual([fl.month, fl.day], [4, 5]);
+assert.ok(fl.names.indexOf('Florin') >= 0 && fl.names.indexOf('Viorica') >= 0);
+assert.deepEqual([nd(2026, 4, 5).month, nd(2026, 4, 5).day], [4, 23], 'after Florii the fixed one');
+assert.deepEqual([nd(2024, 4, 27).month, nd(2024, 4, 27).day], [4, 28], '2024: Easter 5 May -> Florii 28 April');
+assert.equal(nd(2099, 12, 31), null, 'out of the supported years: null, never throws');
+assert.equal(nd(1899, 1, 1), null);
+assert.equal(nd('x', 1, 1), null);
+// Every date of 2026 finds one within a year and never returns the start day.
+for (let m = 1; m <= 12; m++) {
+  const r = nd(2026, m, 15);
+  assert.ok(r && r.names.length > 0 && (r.year > 2026 || r.month > m || (r.month === m && r.day > 15)), 'month ' + m);
+}
 console.log('PASS ro-calendar');

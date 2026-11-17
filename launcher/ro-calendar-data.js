@@ -148,7 +148,28 @@
     return out;
   }
 
+  // The next day after year-month-day (searching day by day, at most 366 days) that has name days, movable ones
+  // included: { year, month, day, names } or null when the table has none at all.
+  function nextNameDay(year, month, day) {
+    var i, d, names;
+    if (!validYear(year)) return null;
+    for (i = 1; i <= 366; i++) {
+      d = new Date(Date.UTC(year, month - 1, day + i));
+      if (!validYear(d.getUTCFullYear())) return null;
+      names = nameDays(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+      if (names.length)
+        return {
+          year: d.getUTCFullYear(),
+          month: d.getUTCMonth() + 1,
+          day: d.getUTCDate(),
+          names: names
+        };
+    }
+    return null;
+  }
+
   return {
+    nextNameDay: nextNameDay,
     orthodoxEaster: orthodoxEaster,
     holidays: holidays,
     holidayNames: holidayNames,

@@ -15,6 +15,7 @@ function context(storage) {
     ctx = { document, localStorage: storage };
   ctx.window = ctx;
   vm.runInNewContext(fs.readFileSync('launcher/info-store.js', 'utf8'), ctx);
+  vm.runInNewContext(fs.readFileSync('launcher/ro-calendar-data.js', 'utf8'), ctx);
   vm.runInNewContext(fs.readFileSync('launcher/calendar-page.js', 'utf8'), ctx);
   return ctx;
 }
@@ -212,35 +213,78 @@ test('landingMonth.marked: days of the current month with an own event (yearly a
   assert.equal(m.today, 16);
   assert.deepEqual(landing([], now).landingMonth().marked, []);
 });
-test('landingEvents: today all-day, today not passed, tomorrow, within 7 days; 8 days none; max 2 lines; empty', () => {
+const one = (id, day, month, title, extra) => cev(id, day, month, title, Object.assign({ yearly: false, year: 2026 }, extra));
+test('landingEvents: today all-day, today not passed, tomorrow, later days up to 12 months; max 2 lines; empty', () => {
   const noon = new Date(2026, 10, 16, 12, 30), // Monday
     L = (events, now) => landing(events, now || noon).landingEvents().map((x) => x.text);
   assert.deepEqual(L([]), []);
-  assert.deepEqual(L([cev('a', 16, 11, 'Passed', { time: '09:00' })]), [], 'passed today');
-  assert.deepEqual(L([cev('a', 16, 11, 'Soon', { time: '12:30' })]), ['Today 12:30 Soon'], 'the current minute is not passed');
-  assert.deepEqual(L([cev('a', 16, 11, 'Later', { time: '18:00' })]), ['Today 18:00 Later']);
-  assert.deepEqual(L([cev('a', 16, 11, 'Whole day')]), ['Today Whole day'], 'all-day: no time');
-  assert.deepEqual(L([cev('a', 17, 11, 'Dentist', { time: '09:00' })]), ['Tomorrow 09:00 Dentist']);
-  assert.deepEqual(L([cev('a', 21, 11, 'Match', { time: '18:00' })]), ['Sat 21 Nov 18:00 Match']);
-  assert.deepEqual(L([cev('a', 23, 11, 'Edge')]), ['Mon 23 Nov Edge'], 'day +7');
-  assert.deepEqual(L([cev('a', 24, 11, 'Too far')]), [], 'day +8');
-  assert.deepEqual(L([cev('a', 16, 11, 'Past', { yearly: false, year: 2025 })]), [], 'one-off of another year');
+  assert.deepEqual(L([cev('a', 16, 11, 'Passed', { time: '09:00' })]), ['Tue 16 Nov 09:00 Passed'], 'passed today: a yearly event recurs next year');
+  assert.deepEqual(L([one('a', 16, 11, 'Passed', { time: '09:00' })]), [], 'a passed one-off is gone');
+  assert.deepEqual(L([one('a', 16, 11, 'Soon', { time: '12:30' })]), ['Today 12:30 Soon'], 'the current minute is not passed');
+  assert.deepEqual(L([one('a', 16, 11, 'Later', { time: '18:00' })]), ['Today 18:00 Later']);
+  assert.deepEqual(L([one('a', 16, 11, 'Whole day')]), ['Today Whole day'], 'all-day: no time');
+  assert.deepEqual(L([one('a', 17, 11, 'Dentist', { time: '09:00' })]), ['Tomorrow 09:00 Dentist']);
+  assert.deepEqual(L([one('a', 21, 11, 'Match', { time: '18:00' })]), ['Sat 21 Nov 18:00 Match']);
+  assert.deepEqual(L([one('a', 23, 11, 'Edge')]), ['Mon 23 Nov Edge'], 'day +7');
+  assert.deepEqual(L([one('a', 24, 11, 'Later')]), ['Tue 24 Nov Later'], 'day +8: inside the 12 months');
+  assert.deepEqual(L([one('a', 24, 11, 'Beyond', { year: 2028 })]), [], 'a one-off more than 12 months away');
+  assert.deepEqual(L([cev('a', 15, 11, 'Almost a year', { time: '10:00' })]), ['Mon 15 Nov 10:00 Almost a year'], 'day +364 (2027): yearly recurs');
+  assert.deepEqual(L([one('a', 16, 11, 'Past', { year: 2025 })]), [], 'one-off of another year');
   // Order: today all-day, today timed by time, then the following days; at most two lines.
   const many = L([
-    cev('1', 17, 11, 'Tomorrow all day'),
-    cev('2', 16, 11, 'Timed', { time: '20:00' }),
-    cev('3', 16, 11, 'All day'),
-    cev('4', 16, 11, 'Earlier timed', { time: '15:00' })
+    one('1', 17, 11, 'Tomorrow all day'),
+    one('2', 16, 11, 'Timed', { time: '20:00' }),
+    one('3', 16, 11, 'All day'),
+    one('4', 16, 11, 'Earlier timed', { time: '15:00' })
   ]);
   assert.deepEqual(many, ['Today All day', 'Today 15:00 Earlier timed']);
-  assert.deepEqual(L([cev('1', 18, 11, 'B'), cev('2', 17, 11, 'A', { time: '10:00' }), cev('3', 17, 11, 'A0')]), ['Tomorrow A0', 'Tomorrow 10:00 A']);
+  assert.deepEqual(L([one('1', 18, 11, 'B'), one('2', 17, 11, 'A', { time: '10:00' }), one('3', 17, 11, 'A0')]), ['Tomorrow A0', 'Tomorrow 10:00 A']);
   // Once the minute is over the event disappears.
-  const C = landing([cev('a', 16, 11, 'Soon', { time: '12:30' })], noon);
+  const C = landing([one('a', 16, 11, 'Soon', { time: '12:30' })], noon);
   assert.equal(C.landingEvents().length, 1);
   C.setClock(() => new Date(2026, 10, 16, 12, 31));
   assert.equal(C.landingEvents().length, 0);
   // Year boundary: 29 December looks 7 days ahead into January.
-  assert.deepEqual(L([cev('a', 3, 1, 'New year')], new Date(2026, 11, 29, 8, 0)), ['Sun 3 Jan New year']);
+  assert.deepEqual(L([one('a', 3, 1, 'New year', { year: 2027 })], new Date(2026, 11, 29, 8, 0)), ['Sun 3 Jan New year']);
+});
+test('landingEventsCard: never empty; "No events upcoming" when nothing is coming; otherwise the next 2 lines', () => {
+  const now = new Date(2026, 10, 16, 12, 30),
+    C0 = landing([], now);
+  assert.deepEqual(C0.landingEventsCard(), { title: 'Events', lines: ['No events upcoming'] });
+  const C1 = landing([one('a', 17, 11, 'Dentist', { time: '09:00' }), one('b', 18, 11, 'Second'), one('c', 19, 11, 'Third')], now);
+  assert.deepEqual(C1.landingEventsCard().lines, ['Tomorrow 09:00 Dentist', 'Wed 18 Nov Second']);
+  assert.deepEqual(C1.landingEvents().length, 2);
+});
+function nameDay(now, marks) {
+  const ctx = context(memory());
+  ctx.HomeCalendar.setClock(() => now);
+  if (marks) ctx.HomeInfo.daily.set(marks);
+  return ctx.HomeCalendar.landingNameDay();
+}
+test('landingNameDay: never empty: names; names + holiday; no names -> "No name days today" + the next one', () => {
+  assert.deepEqual(nameDay(new Date(2026, 10, 16, 12)), { title: 'Name day', lines: ['Matei'] });
+  // 30 November: names and the holiday (St Andrew).
+  const hol = nameDay(new Date(2026, 10, 30, 12));
+  assert.equal(hol.lines.length, 2);
+  assert.match(hol.lines[0], /Andrei, Andreea/);
+  assert.match(hol.lines[1], /Andrei/);
+  // 17 November has no names: the next name day is 25 November.
+  assert.deepEqual(nameDay(new Date(2026, 10, 17, 12)).lines, ['No name days today', '25 Nov: Ecaterina, Cătălina, Cătălin']);
+  // Day before 8 November, month wrap (31 Oct -> 8 Nov), year wrap (28 Dec -> 1 Jan), movable (Florii 5 April 2026).
+  assert.deepEqual(nameDay(new Date(2026, 9, 31, 12)).lines, ['No name days today', '8 Nov: Mihail, Mihai, Mihaela, Gabriel, Gabriela']);
+  assert.equal(nameDay(new Date(2026, 11, 28, 12)).lines[1], '1 Jan: Vasile, Vasilica');
+  assert.match(nameDay(new Date(2026, 3, 4, 12)).lines[1], /^5 Apr: Florin, Florina/);
+  assert.equal(nameDay(new Date(2026, 3, 5, 12)).lines[0], 'Florin, Florina, Floriana, Florentina, Florica, Viorel, Viorica', 'movable day itself');
+  // A holiday without names, name days marked: the next name day comes second (the holiday only when there is none).
+  assert.deepEqual(nameDay(new Date(2026, 11, 1, 12)).lines, ['No name days today', '4 Dec: Varvara']);
+});
+test('landingNameDay: the Rates & holidays switches still apply', () => {
+  const day = new Date(2026, 10, 30, 12);
+  assert.deepEqual(nameDay(day, { showHolidays: false }).lines, ['Andrei, Andreea'], 'holidays off: no holiday line');
+  assert.deepEqual(nameDay(day, { showNameDays: false }).lines.length, 1, 'name days off: the holiday only');
+  assert.match(nameDay(day, { showNameDays: false }).lines[0], /Andrei/);
+  assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false }), null, 'nothing to show: no element');
+  assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false, showHolidays: false }), null);
 });
 test('isoWeek', () => {
   const C = context(memory()).HomeCalendar;

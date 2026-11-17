@@ -737,29 +737,40 @@
       })
     };
   }
-  // Name day card: the names celebrated today (when name days are marked), then the holiday name(s) (when holidays are
-  // marked), at most 2 lines; null when there is nothing to show.
+  // Name day (the top row of the main page): never empty. Names celebrated today (when name days are marked) on line 1,
+  // the holiday name under them (when holidays are marked); a day without names says "No name days today" and gives the
+  // next name day "21 Nov: Mihail, Gavril". At most 2 lines; null only when the device date is unavailable.
   function landingNameDay() {
     var today = readToday();
     if (!today || !daily) return null;
     var marks = safe(daily.get, { showHolidays: true, showNameDays: true }),
       lines = [],
+      cal = root.HomeRoCalendar,
       holidays = safe(function () {
         return marks.showHolidays
-          ? root.HomeRoCalendar.holidayNames(today.year, today.month, today.day)
+          ? cal.holidayNames(today.year, today.month, today.day)
           : [];
       }, []),
       names = safe(function () {
         return marks.showNameDays
-          ? root.HomeRoCalendar.nameDays(today.year, today.month, today.day)
+          ? cal.nameDays(today.year, today.month, today.day)
           : [];
-      }, []);
-    // Title is the card's own ("Name day"), no date; names first, a holiday name under them.
-    if (names.length) lines.push(names.join(', '));
-    if (holidays.length) lines.push(holidays.join(', '));
-    return lines.length
-      ? { title: t('Name day'), lines: lines.slice(0, 2) }
-      : null;
+      }, []),
+      next = null;
+    if (names.length) {
+      lines.push(names.join(', '));
+      if (holidays.length) lines.push(holidays.join(', '));
+    } else if (marks.showNameDays) {
+      lines.push(t('No name days today'));
+      next = safe(function () {
+        return cal.nextNameDay(today.year, today.month, today.day);
+      }, null);
+      if (next)
+        lines.push(next.day + ' ' + shortMonth(next.month) + ': ' + next.names.join(', '));
+      else if (holidays.length) lines.push(holidays.join(', '));
+    } else if (holidays.length) lines.push(holidays.join(', '));
+    // Name days not marked and no holiday to show: nothing at all.
+    return lines.length ? { title: t('Name day'), lines: lines.slice(0, 2) } : null;
   }
 
   // Short month name for the events line: English table, Romanian from the catalogue, others from the engine.
@@ -776,8 +787,9 @@
     }
   }
   // Next own events from now, stored data only: today's all-day events, today's timed events not yet passed, then the
-  // following 7 days (all-day first, then by time). At most 2 lines { text, when, time, title }:
-  // "Today 14:30 Title", "Tomorrow 09:00 Title", "Fri 21 Nov 18:00 Title"; all-day events carry no time.
+  // following days up to 12 months ahead (all-day first, then by time; yearly events recur). At most 2 lines
+  // { text, when, time, title }: "Today 14:30 Title", "Tomorrow 09:00 Title", "Sat 21 Nov 18:00 Title" (Romanian:
+  // "azi", "mâine", "sâm 21 nov"); all-day events carry no time.
   function landingEvents() {
     var now = safe(clock, null),
       today = readToday();
@@ -788,7 +800,7 @@
       i,
       day,
       list;
-    for (i = 0; i <= 7 && out.length < 2; i++) {
+    for (i = 0; i <= 366 && out.length < 2; i++) {
       day = i ? shift(today, i) : today;
       list = eventsOn(events, day.year, day.month, day.day);
       list.forEach(function (e) {
@@ -801,7 +813,11 @@
             ? t('Today')
             : i === 1
               ? t('Tomorrow')
-              : weekdayName(weekdayOf(day.year, day.month, day.day), true) + ' ' + day.day + ' ' + shortMonth(day.month);
+              : (function () {
+                  var w = weekdayName(weekdayOf(day.year, day.month, day.day), true);
+                  if (root.HomeI18n && !/^en/.test(root.HomeI18n.language())) w = w.toLowerCase();
+                  return w + ' ' + day.day + ' ' + shortMonth(day.month);
+                })();
         out.push({
           when: when,
           time: e.time ? timeText(e.time) : '',
@@ -813,7 +829,22 @@
     return out;
   }
 
+  // Events card of the main page: never empty (a line says so when nothing is upcoming).
+  function landingEventsCard() {
+    if (!calendar) return null;
+    var list = landingEvents();
+    return {
+      title: t('Events'),
+      lines: list.length
+        ? list.map(function (e) {
+            return e.text;
+          })
+        : [t('No events upcoming')]
+    };
+  }
+
   root.HomeCalendar = {
+    landingEventsCard: landingEventsCard,
     landingEvents: landingEvents,
     landingMonth: landingMonth,
     landingNameDay: landingNameDay,
