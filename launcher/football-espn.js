@@ -85,7 +85,7 @@
     if (logo) target.logo = logo;
     return target;
   }
-  function parseEvent(e, competition) {
+  function parseEvent(e, competition, league) {
     e = obj(e);
     var comp =
       e && Array.isArray(e.competitions) ? obj(e.competitions[0]) : null;
@@ -104,7 +104,7 @@
     home = side(comp.competitors, 'home');
     away = side(comp.competitors, 'away');
     if (!home || !away) return null;
-    return {
+    var match = {
       id: id,
       competition: competition,
       home: withLogo(
@@ -130,13 +130,17 @@
           ? status.displayClock
           : ''
     };
+    // National-team matches remember the ESPN league they were read from (additive): the live refresh asks that
+    // league's scoreboard only.
+    if (league) match.league = league;
+    return match;
   }
-  function parseMatches(payload, competition) {
+  function parseMatches(payload, competition, league) {
     var list =
         obj(payload) && Array.isArray(payload.events) ? payload.events : [],
       out = [];
     for (var i = 0; i < list.length; i++) {
-      var match = parseEvent(list[i], competition);
+      var match = parseEvent(list[i], competition, league);
       if (match) out.push(match);
     }
     return out;
@@ -189,6 +193,14 @@
       })
     );
   }
+  // Live refresh of a national team's match: the scoreboard of the ESPN league it is played in (one request).
+  function leagueBoard(slug) {
+    if (NATIONAL_LEAGUES.indexOf(slug) < 0)
+      return root.Promise.reject(new Error('football-unknown-league'));
+    return get(slug + '/scoreboard').then(function (p) {
+      return parseMatches(p, NATIONAL, slug);
+    });
+  }
   function teams(competition) {
     if (competition === NATIONAL)
       return root.Promise.resolve(
@@ -207,7 +219,7 @@
       NATIONAL_LEAGUES.map(function (slug) {
         return get(slug + '/teams/' + tid + '/schedule').then(
           function (p) {
-            return { slug: slug, list: parseMatches(p, NATIONAL) };
+            return { slug: slug, list: parseMatches(p, NATIONAL, slug) };
           },
           function (e) {
             return { slug: slug, error: e };
@@ -234,7 +246,7 @@
       return (current
         ? get(current + '/teams/' + tid + '/schedule?fixture=true').then(
             function (p) {
-              return parseMatches(p, NATIONAL);
+              return parseMatches(p, NATIONAL, current);
             },
             function () {
               return [];
@@ -298,6 +310,7 @@
   root.FootballEspn = {
     competitions: COMPETITIONS,
     scoreboard: scoreboard,
+    leagueBoard: leagueBoard,
     teams: teams,
     teamMatches: teamMatches
   };

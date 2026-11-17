@@ -14,7 +14,7 @@
     LEAGUE = '4691',
     COMPETITIONS = [{ id: 'rou.1', name: 'Liga 1 România' }],
     TTL_ANCHOR = 20 * 60000, // which round is "now" changes rarely
-    TTL_HOT = 40000, // the rounds around now: under the 60 s live timer, so a live refresh really asks again
+    TTL_HOT = 115000, // the rounds around now: a little under the 120 s live poll, so a live poll really asks again
     TTL_COLD = 30 * 60000, // earlier / later rounds change little
     NEAR = 2; // rounds kept before the last played round and after the next one
 
@@ -74,7 +74,7 @@
       hn = str(e.strHomeTeam),
       an = str(e.strAwayTeam);
     if (!id || !state || !start || !hid || !aid || !hn || !an) return null;
-    return {
+    var match = {
       id: id,
       competition: competition,
       home: withLogo(
@@ -97,6 +97,14 @@
       state: state,
       clock: state === 'in' ? str(e.strProgress) || str(e.strStatus) : ''
     };
+    // The round and season the match belongs to (additive): the live refresh asks that one round only.
+    var rnd = parseInt(str(e.intRound), 10),
+      season = str(e.strSeason);
+    if (rnd > 0 && /^\d{4}-\d{4}$/.test(season)) {
+      match.round = rnd;
+      match.season = season;
+    }
+    return match;
   }
   function parseMatches(payload, competition) {
     var list =
@@ -237,6 +245,20 @@
       ? null
       : root.Promise.reject(new Error('football-unknown-competition'));
   }
+  // Live refresh: only the round that holds the live match (one request; no anchor, no other round). A stale answer
+  // (the request failed) rejects so that the caller can back off.
+  function liveRound(competition, n, season) {
+    var bad =
+      checked(competition) ||
+      (n > 0 && /^\d{4}-\d{4}$/.test(String(season))
+        ? null
+        : root.Promise.reject(new Error('football-round')));
+    if (bad) return bad;
+    return round(String(season), n, TTL_HOT, competition).then(function (r) {
+      if (r.stale) throw new Error('football-sportsdb-stale');
+      return r.list;
+    });
+  }
   // The matchday(s) around now: the last played round and the next one.
   function scoreboard(competition) {
     return checked(competition) || load(competition, true);
@@ -279,6 +301,7 @@
     handles: handles,
     keyTag: 'sdb.',
     scoreboard: scoreboard,
+    liveRound: liveRound,
     teams: teams,
     teamMatches: teamMatches
   };

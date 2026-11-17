@@ -3,6 +3,26 @@
   'use strict';
   const PREFIX = 'tvhome.cache.v1.',
     inflight = {};
+  // The clock of the cache (ms); a test seam, Date.now otherwise.
+  function realNow() {
+    return Date.now();
+  }
+  let clockNow = realNow;
+  function setClock(fn) {
+    clockNow = typeof fn === 'function' ? fn : realNow;
+  }
+  // Listeners told about every request that is really sent (the football scheduler counts them per host).
+  const requestListeners = [];
+  function onRequest(cb) {
+    if (typeof cb === 'function') requestListeners.push(cb);
+  }
+  function announce(url) {
+    requestListeners.slice().forEach(function (cb) {
+      try {
+        cb(url);
+      } catch (_) {}
+    });
+  }
   // One retry on a network error; timeouts and bad statuses reject at once.
   function http(url, opts) {
     const timeoutMs = (opts && opts.timeoutMs) || 12000;
@@ -15,6 +35,7 @@
           settled = true;
           error ? reject(error) : resolve(value);
         }
+        announce(url);
         try {
           xhr.open('GET', url, true);
           xhr.timeout = timeoutMs;
@@ -58,7 +79,7 @@
     } catch (_) {}
   }
   function cached(key, ttlMs, loader, opts) {
-    const now = (opts && opts.now) || Date.now,
+    const now = (opts && opts.now) || clockNow,
       entry = readEntry(key);
     // A fetchedAt in the future (TV clock was wrong when it was written) is not fresh.
     const age = entry ? now() - entry.fetchedAt : -1;
@@ -100,5 +121,5 @@
     const m = /^https:\/\/([a-z0-9.-]+)\/[^\s"'<>\\]*$/.exec(value);
     return m && LOGO_HOSTS.indexOf(m[1]) >= 0 ? value : '';
   }
-  root.HomeInfoFetch = { http: http, cached: cached, logoUrl: logoUrl };
+  root.HomeInfoFetch = { http: http, cached: cached, logoUrl: logoUrl, onRequest: onRequest, setClock: setClock };
 })(window);

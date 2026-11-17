@@ -392,7 +392,7 @@ test('refresh: live match from the scoreboard wins, live=true, idle line has sco
   assert.match(lines[0], /Arsenal 2-1 Hull City/);
   assert.match(lines[0], /34'/);
 });
-test('refresh: live data is cached only briefly (about a minute)', async () => {
+test('refresh: the full refresh is cached for 55 minutes also while a match is live (live polls are the scheduler\'s narrow ones)', async () => {
   const sb = JSON.stringify({
       events: [event('9', ARS, HUL, 'in', 0, 0, '2026-11-16T11:30Z')]
     }),
@@ -401,8 +401,6 @@ test('refresh: live data is cached only briefly (about a minute)', async () => {
   followArsenal(ctx);
   await ctx.HomeFootball.refresh();
   assert.equal(ctx.requests.length, 3);
-  await ctx.HomeFootball.refresh(); // just fetched: cached (the previous round saw a live match -> 50 s lifetime)
-  assert.equal(ctx.requests.length, 3);
   for (const k of Object.keys(mem.data))
     if (k.indexOf('tvhome.cache.v1.') === 0) {
       const e = JSON.parse(mem.data[k]);
@@ -410,7 +408,15 @@ test('refresh: live data is cached only briefly (about a minute)', async () => {
       mem.data[k] = JSON.stringify(e);
     }
   await ctx.HomeFootball.refresh();
-  assert.equal(ctx.requests.length, 6, 'refetched after 55 s while live');
+  assert.equal(ctx.requests.length, 3, 'a live match no longer shortens the full refresh (55 s old data is still cached)');
+  for (const k of Object.keys(mem.data))
+    if (k.indexOf('tvhome.cache.v1.') === 0) {
+      const e = JSON.parse(mem.data[k]);
+      e.fetchedAt -= 56 * 60000;
+      mem.data[k] = JSON.stringify(e);
+    }
+  await ctx.HomeFootball.refresh();
+  assert.equal(ctx.requests.length, 6, 'refetched after the 55 minute lifetime');
 });
 test('refresh: offline keeps cached values, state offline with fetchedAt', async () => {
   const mem = memory();
@@ -542,7 +548,9 @@ test('sportsdb scoreboard: the two matchdays around now, Match shape, UTC start'
     },
     start: '2026-11-09T18:00:00Z',
     state: 'post',
-    clock: ''
+    clock: '',
+    round: 15, // additive: the live refresh asks this round only
+    season: '2026-2027'
   });
   assert.equal(todo.state, 'pre');
   assert.equal(todo.start, '2026-11-20T15:30:00Z');

@@ -128,7 +128,8 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
     await page.locator('#infoPanel .info-tab', { hasText: 'Football' }).click();
   };
   const text = () => page.locator('#infoPanel .fb-page').innerText();
-  const timers = () => page.evaluate(() => Object.values(window.__ids).slice());
+  // The football scheduler's single timer (its delay varies: hourly, kickoff wake-up, live cadence).
+  const timers = () => page.evaluate(() => (HomeFootball.schedulerState().timer ? ['scheduler'] : []));
   const full = { competitions: ['eng.1'], teams: [TEAM] };
 
   // 1. Nothing configured: friendly message, no request, no timer-triggered fetch.
@@ -158,8 +159,8 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
   assert.doesNotMatch(t2, /standing|table|points|Pts/i, 'no standings');
   assert.deepEqual(
     await timers(),
-    [3600000],
-    'hourly timer while shown, no live match'
+    ['scheduler'],
+    'one scheduler timer while shown'
   );
   assert.equal(
     seen.filter((u) => /eng\.1\/(scoreboard|teams\/359\/schedule)/.test(u))
@@ -174,7 +175,7 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
   const live = await page.locator('#infoPanel .fb-team .fb-live').innerText();
   assert.match(live, /34'/);
   assert.match(live, /Arsenal 2-1 Hull City/);
-  assert.deepEqual(await timers(), [60000]);
+  assert.deepEqual(await timers(), ['scheduler']);
   assert.equal(await page.locator('#infoPanel .fb-match.fb-live').count(), 1);
 
   // 4. Timers: none once hidden (page switch) or closed; none and no request once the scope is off.
@@ -186,7 +187,7 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
   );
   assert.deepEqual(await timers(), [], 'no timer once hidden');
   await page.locator('#infoPanel .info-tab', { hasText: 'Football' }).click();
-  assert.deepEqual(await timers(), [60000]);
+  assert.deepEqual(await timers(), ['scheduler']);
   await page.keyboard.press('ArrowRight');
   assert.equal(
     await page.locator('#infoPanel .fb-page').isVisible(),
@@ -231,7 +232,7 @@ const TEAM = { competition: 'eng.1', id: '359', name: 'Arsenal' };
     /unavailable/i.test(document.querySelector('#infoPanel .fb-page').innerText)
   );
   assert.equal(await page.locator('#infoPanel .fb-team .fb-next').count(), 0);
-  assert.deepEqual(await timers(), [3600000]);
+  assert.deepEqual(await timers(), ['scheduler']);
   await page.evaluate(() => InfoPanel.close());
 
   // 6. Tab: real tab, nothing fetched before it is used; teams come from the ticked competitions.

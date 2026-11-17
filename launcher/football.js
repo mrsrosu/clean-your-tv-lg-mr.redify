@@ -5,9 +5,11 @@
  * state). The page shows, for every followed team, the live score / next match / last result, and today's matches of
  * the ticked competitions. No standings.
  *
- * refresh() is exported (the idle screen calls it too). While the page is shown it re-runs every hour, every 60 s
- * while a followed team is live; no timer while the page is hidden or the scope is off. A small snapshot of the last
- * answers (tvhome.football.snapshot.v1) feeds idleLines() synchronously, with no request.
+ * One scheduler (attach/detach of consumers: this page while shown, the main-page card, the idle info panel) keeps the
+ * data fresh: a full refresh at most hourly, a wake-up at the kickoff of a followed match, and from kickoff to
+ * kickoff + 130 minutes a narrow live refresh of that match's competition only (see "the scheduler" below). No timer
+ * without a consumer, with the scope off or a hidden document. A small snapshot of the last answers
+ * (tvhome.football.snapshot.v1) feeds idleLines() synchronously, with no request.
  * The page has no keys of its own: Left/Right fall through to the info panel.
  */
 (function (root) {
@@ -19,7 +21,12 @@
     MAX_TEAMS = 5,
     HOUR = 3600000,
     TTL_HOURLY = 55 * 60000, // a little under the hourly timer, so the timer always finds the cache expired
-    TTL_LIVE = 50000, // a little under the 60 s timer
+    LIVE_WINDOW = 130 * 60000, // a followed match is "possibly live" from kickoff to kickoff + 130 minutes
+    KICKOFF_WAKE = 60000, // the scheduler wakes this long after a followed kickoff inside the coming hour
+    LIVE_EVERY = { espn: 60000, sdb: 120000 }, // live cadence per provider
+    LIVE_TTL_ESPN = 55000, // a little under the 60 s poll
+    CAPS = { espn: 10, sdb: 3 }, // most requests per minute the live polls may bring a provider to
+    BACKOFF_MS = 3 * 60000, // a provider that answered with an error is left alone this long
     TTL_TEAMS = 7 * 86400000,
     GRACE = 2 * HOUR, // a "pre" match this long after its start still counts as the next one
     SNAP_KEY = 'tvhome.football.snapshot.v1',
@@ -309,8 +316,7 @@
       comps = [],
       cache = root.HomeInfoFetch,
       nowMs = clock().getTime(),
-      before = readSnap(),
-      wasLive;
+      before = readSnap();
     function add(c) {
       if (comps.indexOf(c) < 0) comps.push(c);
     }
@@ -330,19 +336,16 @@
         fetchedAt: null,
         live: false
       });
-    wasLive = statuses(before, clock().toISOString()).some(function (x) {
-      return !!x.status.live;
-    });
-    var ttl = wasLive ? TTL_LIVE : TTL_HOURLY,
+    var ttl = TTL_HOURLY,
       jobs = [];
     comps.forEach(function (c) {
       jobs.push({
         kind: 'boards',
         key: c,
         cache: ck('fb.sb.', c),
-        load: function () {
+        load: guarded(providerKind(c), function () {
           return provider(c).scoreboard(c);
-        }
+        })
       });
     });
     s.teams.forEach(function (x) {
@@ -350,13 +353,13 @@
         kind: 'teams',
         key: teamKey(x),
         cache: ck('fb.tm.', x.competition) + '.' + x.id,
-        load: function () {
+        load: guarded(providerKind(x.competition), function () {
           return provider(x.competition)
             .teamMatches(x.competition, x.id)
             .then(function (list) {
               return windowed(list, nowMs);
             });
-        }
+        })
       });
     });
     return root.Promise.all(
@@ -406,6 +409,256 @@
         })
       };
     });
+  }
+
+  // ---- the scheduler: one for every consumer (page, main-page card, idle panel) ----
+  // Base: a full refresh at most hourly. A followed match's kickoff inside the coming hour wakes it at kickoff + 60 s.
+  // From kickoff to kickoff + 130 minutes (while the state is pre or in) only the competition of that match is asked:
+  // ESPN's scoreboard every 60 s (a national team: the scoreboard of the league of the match), Liga 1's one round every
+  // 120 s. Per provider at most 10 (ESPN) / 3 (TheSportsDB) requests a minute for live polls (the rest waits for the next
+  // tick), and 3 minutes of silence after an error. Nothing runs without a consumer, with the scope off, a hidden
+  // document, or nothing followed.
+  var consumers = {},
+    schedTimer = null,
+    busy = false,
+    lastFull = 0,
+    lastNeedFull = 0,
+    lastPoll = {},
+    backoffUntil = { espn: 0, sdb: 0 },
+    reqLog = { espn: [], sdb: [] };
+  function providerKind(id) {
+    return sportsdb && sportsdb.handles(id) ? 'sdb' : 'espn';
+  }
+  // A provider call that waits out the backoff instead of asking.
+  function guarded(kind, fn) {
+    return function () {
+      if (backoffUntil[kind] > clock().getTime())
+        return root.Promise.reject(new Error('football-backoff'));
+      return fn();
+    };
+  }
+  if (root.HomeInfoFetch && root.HomeInfoFetch.onRequest)
+    root.HomeInfoFetch.onRequest(function (url) {
+      var kind = /espn\.com/.test(url) ? 'espn' : /thesportsdb\.com/.test(url) ? 'sdb' : '';
+      if (kind) reqLog[kind].push(clock().getTime());
+    });
+  function recent(kind, now) {
+    var log = reqLog[kind];
+    while (log.length && log[0] <= now - 60000) log.shift();
+    return log.length;
+  }
+  function hasConsumers() {
+    for (var k in consumers)
+      if (Object.prototype.hasOwnProperty.call(consumers, k)) return true;
+    return false;
+  }
+  function schedActive() {
+    var s = store && store.get();
+    return !!(
+      s &&
+      (s.teams.length || s.competitions.length) &&
+      hasConsumers() &&
+      info.isMrRedify() &&
+      !(doc && doc.hidden)
+    );
+  }
+  // What a possibly-live followed match needs: { key, kind, every, end, load } or { needFull } when the stored match
+  // predates the fields the live refresh needs (one full refresh brings them).
+  function liveTargets(now) {
+    var snap = readSnap(),
+      out = {};
+    (store ? store.get().teams : []).forEach(function (team) {
+      matchesOf(snap, team).forEach(function (m) {
+        var start = ms(m.start),
+          c = team.competition,
+          t;
+        if (m.state !== 'pre' && m.state !== 'in') return;
+        if (isNaN(start) || now < start || now >= start + LIVE_WINDOW) return;
+        if (c === 'nat')
+          t = m.league
+            ? { key: 'nat:' + m.league, kind: 'espn', slug: m.league }
+            : { key: 'nat?', needFull: true };
+        else if (providerKind(c) === 'sdb')
+          t =
+            m.round && m.season
+              ? { key: c + ':' + m.round + ':' + m.season, kind: 'sdb', comp: c, round: m.round, season: m.season }
+              : { key: c + '?', needFull: true };
+        else t = { key: c, kind: 'espn', comp: c };
+        t.every = LIVE_EVERY[t.kind || 'espn'];
+        t.end = start + LIVE_WINDOW;
+        if (!out[t.key]) out[t.key] = t;
+      });
+    });
+    return Object.keys(out).map(function (k) {
+      return out[k];
+    });
+  }
+  // The earliest instant a live poll of this target may go out (cadence, backoff, per-minute cap).
+  function nextPollAt(t, now) {
+    var at = (lastPoll[t.key] || 0) + t.every,
+      log;
+    at = Math.max(at, backoffUntil[t.kind]);
+    if (recent(t.kind, now) >= CAPS[t.kind]) {
+      log = reqLog[t.kind];
+      at = Math.max(at, log[log.length - CAPS[t.kind]] + 60000 + 1);
+    }
+    return at;
+  }
+  function liveLoad(t) {
+    var cache = root.HomeInfoFetch;
+    if (t.slug)
+      return cache.cached('fb.lg.' + t.slug, LIVE_TTL_ESPN, function () {
+        return espn.leagueBoard(t.slug);
+      });
+    if (t.kind === 'sdb')
+      return sportsdb.liveRound(t.comp, t.round, t.season).then(function (list) {
+        return { value: list, stale: false };
+      });
+    return cache.cached(ck('fb.sb.', t.comp), LIVE_TTL_ESPN, function () {
+      return provider(t.comp).scoreboard(t.comp);
+    });
+  }
+  // One live poll: merge the answer into the snapshot's board of that competition (Liga 1: only the round's matches);
+  // an error silences the provider for 3 minutes. Never rejects.
+  function pollOne(t) {
+    lastPoll[t.key] = clock().getTime();
+    var started;
+    try {
+      started = root.Promise.resolve(liveLoad(t));
+    } catch (e) {
+      started = root.Promise.reject(e);
+    }
+    return started
+      .then(function (r) {
+        if (r.stale || !Array.isArray(r.value)) throw new Error('football-stale');
+        var snap = readSnap(),
+          comp = t.slug ? 'nat' : t.comp,
+          list = r.value;
+        if (t.kind === 'sdb' && Array.isArray(snap.boards[comp])) {
+          var fresh = {};
+          list.forEach(function (m) {
+            fresh[m.id] = m;
+          });
+          list = snap.boards[comp]
+            .filter(function (m) {
+              return !fresh[m.id];
+            })
+            .concat(list);
+        }
+        snap.boards[comp] = list;
+        writeSnap(snap);
+        return true;
+      })
+      .then(null, function () {
+      // Also a stale answer (the request failed and an old copy answered) counts as an error.
+      backoffUntil[t.kind] = clock().getTime() + BACKOFF_MS;
+      return false;
+    });
+  }
+  function notify(result) {
+    for (var k in consumers)
+      if (Object.prototype.hasOwnProperty.call(consumers, k))
+        try {
+          consumers[k](result);
+        } catch (_) {}
+  }
+  function fullRefresh() {
+    busy = true;
+    var run = (root.HomeFootball && root.HomeFootball.refresh) || refresh;
+    return run().then(
+      function (result) {
+        lastFull = clock().getTime();
+        busy = false;
+        notify(result);
+        plan();
+      },
+      function () {
+        lastFull = clock().getTime();
+        busy = false;
+        plan();
+      }
+    );
+  }
+  function tick() {
+    schedTimer = null;
+    if (!schedActive() || busy) return;
+    var now = clock().getTime(),
+      targets,
+      due = [],
+      planned = { espn: 0, sdb: 0 };
+    if (!lastFull || now - lastFull >= HOUR) return fullRefresh();
+    targets = liveTargets(now);
+    if (
+      targets.some(function (t) {
+        return t.needFull;
+      })
+    ) {
+      // A stored match without what the live refresh needs: one full refresh (at most every 5 minutes).
+      if (now - lastNeedFull >= 5 * 60000) {
+        lastNeedFull = now;
+        return fullRefresh();
+      }
+    }
+    targets.forEach(function (t) {
+      if (t.needFull) return;
+      if (nextPollAt(t, now) <= now && recent(t.kind, now) + planned[t.kind] < CAPS[t.kind]) {
+        planned[t.kind]++;
+        due.push(t);
+      }
+    });
+    if (!due.length) return plan();
+    busy = true;
+    root.Promise.all(due.map(pollOne)).then(function () {
+      var at = clock().getTime();
+      busy = false;
+      notify({
+        state: backoffUntil.espn > at || backoffUntil.sdb > at ? 'offline' : 'ok',
+        fetchedAt: at,
+        live: liveTargets(at).length > 0
+      });
+      plan();
+    });
+  }
+  // Sets the single timer to the earliest of: the next hourly refresh, kickoff + 60 s of a followed match in the coming
+  // hour, the next allowed live poll of every possibly-live match.
+  function plan() {
+    if (schedTimer) root.clearTimeout(schedTimer);
+    schedTimer = null;
+    if (!schedActive() || busy) return;
+    var now = clock().getTime(),
+      next = lastFull ? lastFull + HOUR : now,
+      snap = readSnap();
+    (store ? store.get().teams : []).forEach(function (team) {
+      matchesOf(snap, team).forEach(function (m) {
+        var start = ms(m.start);
+        if (m.state === 'pre' && start > now && start <= now + HOUR)
+          next = Math.min(next, start + KICKOFF_WAKE);
+      });
+    });
+    liveTargets(now).forEach(function (t) {
+      next = Math.min(next, t.needFull ? now + 5 * 60000 : nextPollAt(t, now));
+    });
+    schedTimer = root.setTimeout(tick, Math.max(1000, next - now));
+  }
+  // Re-evaluates at once (a consumer came, the scope or the visibility changed).
+  function wake() {
+    if (schedTimer) root.clearTimeout(schedTimer);
+    schedTimer = null;
+    tick();
+  }
+  // A consumer (name free) asks to be kept up to date; cb(result) runs after every refresh or live poll.
+  function attach(name, cb) {
+    consumers[name] = typeof cb === 'function' ? cb : function () {};
+    // A new consumer starts with a full refresh; it costs requests only for what the 55 minute cache no longer holds.
+    lastFull = 0;
+    wake();
+  }
+  function detach(name) {
+    delete consumers[name];
+    if (!hasConsumers()) {
+      if (schedTimer) root.clearTimeout(schedTimer);
+      schedTimer = null;
+    }
   }
 
   // ---- text ----
@@ -609,8 +862,6 @@
   }
   var host = null,
     visible = false,
-    timer = null,
-    generation = 0,
     last = null;
 
   function line(parent, cls, label, text) {
@@ -740,40 +991,18 @@
     }
     if (status) host.appendChild(el('div', 'fb-status', status));
   }
-  function schedule(live, mine) {
-    if (timer) root.clearTimeout(timer);
-    timer = null;
-    if (!visible || mine !== generation) return;
-    timer = root.setTimeout(
-      function () {
-        timer = null;
-        update(mine);
-      },
-      live ? 60000 : HOUR
-    );
-  }
-  function update(mine) {
-    return refresh().then(function (result) {
-      if (mine !== generation) return;
-      last = result;
-      if (visible) {
-        render();
-        schedule(result.live, mine);
-      }
-    });
-  }
   function onShow() {
     visible = true;
     last = null;
-    generation++;
     render();
-    update(generation);
+    attach('page', function (result) {
+      last = result;
+      if (visible) render();
+    });
   }
   function onHide() {
     visible = false;
-    generation++;
-    if (timer) root.clearTimeout(timer);
-    timer = null;
+    detach('page');
   }
 
   // ---- settings tab: Football ----
@@ -982,6 +1211,13 @@
     refresh: refresh,
     idleLines: idleLines,
     landingItems: landingItems,
+    attach: attach,
+    detach: detach,
+    wake: wake,
+    // Test seam: scheduler state.
+    schedulerState: function () {
+      return { timer: schedTimer !== null, consumers: Object.keys(consumers), busy: busy, lastFull: lastFull };
+    },
     label: label,
     logoNode: function (url, size) {
       return logoNode(url, size, false);
@@ -989,9 +1225,24 @@
     clockText: clockText,
     setClock: function (fn) {
       clock = fn;
+      // The response cache follows the same clock (a test seam: TTLs and the scheduler agree on "now").
+      if (root.HomeInfoFetch && root.HomeInfoFetch.setClock)
+        root.HomeInfoFetch.setClock(function () {
+          return clock().getTime();
+        });
     }
   };
   if (info && store) {
+    // Scope or visibility changes re-evaluate the scheduler at once (it then runs or stops).
+    if (info.onScopeChange) info.onScopeChange(wake);
+    // Another team or competition chosen in Settings: its data is fetched now, not at the next hourly refresh.
+    if (info.onChange)
+      info.onChange('tvhome.football.v1', function () {
+        if (!hasConsumers()) return;
+        lastFull = 0;
+        wake();
+      });
+    if (doc && doc.addEventListener) doc.addEventListener('visibilitychange', wake);
     if (info.registerTab)
       info.registerTab({
         id: 'football',
