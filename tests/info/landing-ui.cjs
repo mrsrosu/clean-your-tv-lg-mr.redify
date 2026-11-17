@@ -219,10 +219,19 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
     HomeCalendar.setClock(() => new Date(2026, 10, 17, 12, 0, 0));
     HomeLanding.render();
   });
+  // 17 November has its names now (Sf. Grigorie Taumaturgul).
   assert.deepEqual(
     await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)),
-    ['No name days today', '25 Nov: Ecaterina, Cătălina, Cătălin'],
-    'never empty'
+    ['Grigore, Grigorie, Ghenadie']
+  );
+  await page.evaluate(() => {
+    HomeCalendar.setClock(() => new Date(2026, 11, 25, 12, 0, 0));
+    HomeLanding.render();
+  });
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)),
+    ['No name days today', '26 Dec: David'],
+    'never empty (Christmas has no name day)'
   );
   await page.evaluate(() => {
     HomeCalendar.setClock(() => new Date(2026, 10, 16, 12, 0, 0));
@@ -603,12 +612,12 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.deepEqual(await evLines(), ['Niciun eveniment programat']);
   // A day without names, in Romanian.
   await page.evaluate(() => {
-    HomeCalendar.setClock(() => new Date(2026, 10, 17, 12, 0, 0));
+    HomeCalendar.setClock(() => new Date(2026, 11, 25, 12, 0, 0));
     HomeLanding.render();
   });
   assert.deepEqual(
     await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)),
-    ['Fără onomastici azi', '25 nov: Ecaterina, Cătălina, Cătălin']
+    ['Fără onomastici azi', '26 dec: David']
   );
   g = await geo();
   for (const [k, r] of Object.entries({ date: g.date, buttons: g.buttons, weather: g.weather, grid: g.grid, stack: g.stack }))

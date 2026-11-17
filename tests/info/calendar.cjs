@@ -262,29 +262,39 @@ function nameDay(now, marks) {
   return ctx.HomeCalendar.landingNameDay();
 }
 test('landingNameDay: never empty: names; names + holiday; no names -> "No name days today" + the next one', () => {
+  const L = (y, m, d, marks) => nameDay(new Date(y, m - 1, d, 12), marks).lines;
   assert.deepEqual(nameDay(new Date(2026, 10, 16, 12)), { title: 'Name day', lines: ['Matei'] });
-  // 30 November: names and the holiday (St Andrew).
-  const hol = nameDay(new Date(2026, 10, 30, 12));
-  assert.equal(hol.lines.length, 2);
-  assert.match(hol.lines[0], /Andrei, Andreea/);
-  assert.match(hol.lines[1], /Andrei/);
-  // 17 November has no names: the next name day is 25 November.
-  assert.deepEqual(nameDay(new Date(2026, 10, 17, 12)).lines, ['No name days today', '25 Nov: Ecaterina, Cătălina, Cătălin']);
-  // Day before 8 November, month wrap (31 Oct -> 8 Nov), year wrap (28 Dec -> 1 Jan), movable (Florii 5 April 2026).
-  assert.deepEqual(nameDay(new Date(2026, 9, 31, 12)).lines, ['No name days today', '8 Nov: Mihail, Mihai, Mihaela, Gabriel, Gabriela']);
-  assert.equal(nameDay(new Date(2026, 11, 28, 12)).lines[1], '1 Jan: Vasile, Vasilica');
-  assert.match(nameDay(new Date(2026, 3, 4, 12)).lines[1], /^5 Apr: Florin, Florina/);
-  assert.equal(nameDay(new Date(2026, 3, 5, 12)).lines[0], 'Florin, Florina, Floriana, Florentina, Florica, Viorel, Viorica', 'movable day itself');
-  // A holiday without names, name days marked: the next name day comes second (the holiday only when there is none).
-  assert.deepEqual(nameDay(new Date(2026, 11, 1, 12)).lines, ['No name days today', '4 Dec: Varvara']);
+  // 17 November (Sf. Grigorie Taumaturgul) now has its names.
+  assert.deepEqual(L(2026, 11, 17), ['Grigore, Grigorie, Ghenadie']);
+  assert.deepEqual(L(2026, 11, 25), ['Ecaterina, Cătălina, Cătălin']);
+  // 30 November: names and the holiday (St Andrew); 1 December: the name and the National Day.
+  const hol = L(2026, 11, 30);
+  assert.equal(hol.length, 2);
+  assert.match(hol[0], /Andrei, Andreea/);
+  assert.match(hol[1], /Andrei/);
+  assert.deepEqual(L(2026, 12, 1), ['Anastasia', 'Ziua Națională a României']);
+  // Days that stay without names: "No name days today" and the next one (also over the year end and a month end).
+  assert.deepEqual(L(2026, 12, 25), ['No name days today', '26 Dec: David'], 'Christmas: no name, next 26 Dec');
+  assert.deepEqual(L(2026, 3, 9), ['No name days today', '10 Mar: Codrat, Ciprian, Dionisie, Cipriana']);
+  assert.deepEqual(L(2026, 12, 28), ['No name days today', '29 Dec: Marcel, Tadeu']);
+  assert.equal(nameDay(new Date(2026, 11, 31, 12)).lines[0], 'Melania, Romana', '31 Dec has names');
+  // The next-name-day line wraps over the year end and a month end for a day without names (leap year 2028).
+  assert.deepEqual(L(2028, 3, 9), ['No name days today', '10 Mar: Codrat, Ciprian, Dionisie, Cipriana']);
+  // Movable: Florii (5 April 2026) adds its names to the fixed saint of the day; the day before points to it.
+  assert.equal(L(2026, 4, 5)[0], 'Teodora, Florin, Florina, Floriana, Florentina, Florica, Viorel, Viorica', 'movable + fixed');
+  assert.equal(nameDay(new Date(2026, 3, 4, 12)).lines.length, 1, '4 April has names itself');
+  // 29 February.
+  assert.deepEqual(L(2028, 2, 29), ['Casian']);
 });
 test('landingNameDay: the Rates & holidays switches still apply', () => {
   const day = new Date(2026, 10, 30, 12);
   assert.deepEqual(nameDay(day, { showHolidays: false }).lines, ['Andrei, Andreea'], 'holidays off: no holiday line');
+  assert.deepEqual(nameDay(new Date(2026, 11, 1, 12), { showHolidays: false }).lines, ['Anastasia']);
   assert.deepEqual(nameDay(day, { showNameDays: false }).lines.length, 1, 'name days off: the holiday only');
   assert.match(nameDay(day, { showNameDays: false }).lines[0], /Andrei/);
   assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false }), null, 'nothing to show: no element');
   assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false, showHolidays: false }), null);
+  assert.deepEqual(nameDay(new Date(2026, 11, 25, 12), { showNameDays: false }).lines.length, 1, 'holiday only');
 });
 test('isoWeek', () => {
   const C = context(memory()).HomeCalendar;
