@@ -328,7 +328,6 @@
       } catch (_) {}
     }
     if (s.blocks.rates) call(root.HomeInfoFinance, 'refreshIfDue');
-    if (s.blocks.football) call(root.HomeFootball);
     if (jobs.length && root.Promise)
       root.Promise.all(jobs).then(function () {
         if (mine === generation && overlay && !overlay.hidden) render();
@@ -341,11 +340,17 @@
     shadeEl.style.opacity = String(s.dim / 100);
     overlay.hidden = false;
     doc.body.classList.add('idle-active');
+    // The football scheduler keeps the football block fresh while this overlay shows it (panel style only).
+    if (s.style === 'panel' && s.blocks.football && root.HomeFootball && root.HomeFootball.attach)
+      root.HomeFootball.attach('idle', function () {
+        if (overlay && !overlay.hidden) render();
+      });
     lastRefresh = 0;
     if (tickTimer !== null) root.clearTimeout(tickTimer);
     tick();
   }
   function hide() {
+    if (root.HomeFootball && root.HomeFootball.detach) root.HomeFootball.detach('idle');
     generation++;
     if (tickTimer !== null) root.clearTimeout(tickTimer);
     tickTimer = null;

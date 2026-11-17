@@ -131,9 +131,13 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   const home = await openHome({ mrRedify: true }),
     page = home.page;
   let requests = 0;
+  const reqUrls = [];
   // The weather block asks its own providers; only the football and BNR hosts count here.
   page.on('request', (r) => {
-    if (/^https?:/.test(r.url()) && /espn|thesportsdb|bnr\.ro/.test(r.url())) requests++;
+    if (/^https?:/.test(r.url()) && /espn|thesportsdb|bnr\.ro/.test(r.url())) {
+      requests++;
+      reqUrls.push(r.url());
+    }
   });
   await page.context().addInitScript((seedJson) => {
     const w = JSON.parse(seedJson);
@@ -695,6 +699,8 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   await page.clock.install({ time: new Date(2026, 10, 16, 23, 58, 0) });
   await page.evaluate(() => {
     HomeLanding.setClock(() => Date.now());
+    // The football scheduler and its response cache follow the (fake) page clock here.
+    HomeFootball.setClock(() => new Date());
     window.__calls = { rates: 0, football: 0 };
   });
   await page.clock.runFor(3 * 3600000);
@@ -712,12 +718,15 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.equal(afterTwoHours.football, 3, 'football: one refresh per hour, not more: ' + JSON.stringify(afterTwoHours));
   assert.ok(afterTwoHours.rates >= 100, 'the rates schedule is asked on the minute tick (it costs nothing unless a slot is due): ' + afterTwoHours.rates);
   await home.setScope(false);
+  const netBefore = requests;
   const before = await page.evaluate(() => window.__calls);
   await page.clock.runFor(3 * 3600000);
   assert.deepEqual(await page.evaluate(() => window.__calls), before, 'scope off: no refresh');
   assert.equal((await state(page)).timer, false);
   await toggles(page, NONE);
-  assert.equal(requests, 0, 'no network request at all (the routes abort every http request)');
+  assert.equal(requests, netBefore, 'scope off: no network request any more');
+  // The only requests of the whole run are the football scheduler's live polls of the seeded live match (the routes abort them).
+  assert.ok(reqUrls.every((u) => /eng\.1\/scoreboard$/.test(u)), 'only live scoreboard polls: ' + reqUrls.join());
   // 13. The weather in its text (compact) format: the first visible text of the weather and of the grid still start on
   // one line, and nothing overlaps the weather block (the cards column gives way to its width).
   const home2 = await openHome({ mrRedify: true }),

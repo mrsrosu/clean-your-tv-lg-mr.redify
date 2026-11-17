@@ -219,6 +219,8 @@ const assert = require('node:assert/strict'),
   await page.evaluate(() => {
     localStorage.removeItem('tvhome.finance.v1');
     HomeInfo.daily.set({ showHolidays: true, showNameDays: true });
+    // The football scheduler runs only for something followed.
+    HomeInfo.football.set({ competitions: ['eng.1'] });
   });
   await setup({
     timeoutMin: 5,
@@ -244,7 +246,10 @@ const assert = require('node:assert/strict'),
     2,
     'both refreshes called once when shown'
   );
+  // The football block is served by the scheduler only while the overlay shows it.
+  assert.ok(await page.evaluate(() => HomeFootball.schedulerState().consumers.indexOf('idle') >= 0), 'idle attached while shown');
   await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.evaluate(() => HomeFootball.schedulerState().consumers.indexOf('idle')), -1, 'detached when the overlay closes');
 
   // 11. Panel style with data and a holiday (25 Dec): rates and football lines, holiday under the date.
   await page.clock.setSystemTime(new Date(2026, 11, 25, 10, 0, 0));

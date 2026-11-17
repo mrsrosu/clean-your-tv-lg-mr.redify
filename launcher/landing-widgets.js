@@ -525,7 +525,6 @@
         );
     }
     run('rates', w.rates, root.HomeInfoFinance, 'refreshIfDue', 0);
-    run('football', w.football, root.HomeFootball, 'refresh', HOUR);
   }
   function tick() {
     timer = null;
@@ -544,8 +543,23 @@
     if (timer !== null) root.clearTimeout(timer);
     timer = null;
   }
+  // The football scheduler (football.js) keeps the card's data fresh while it is attached: only while the card is wanted.
+  var attached = false;
+  function footballFeed(on) {
+    if (!root.HomeFootball || !root.HomeFootball.attach) return;
+    if (on && !attached) {
+      attached = true;
+      root.HomeFootball.attach('card', function () {
+        if (active()) render();
+      });
+    } else if (!on && attached) {
+      attached = false;
+      root.HomeFootball.detach('card');
+    }
+  }
   // The single entry: scope change, Settings change, visibility, resize and startup all land here.
   function reconcile() {
+    footballFeed(active() && wanted().football);
     if (!active()) {
       stop();
       render();
