@@ -171,7 +171,14 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.match(text, /16\.11/, 'BNR date');
   assert.match(text, /Arsenal/);
   assert.match(text, /Live 34' · 2 - 1/);
-  assert.doesNotMatch(text, /Dentist|Next:/, 'no own events on the main page');
+  // Own events: the next ones under the grid, a dot under the marked days (the seeded yearly event is on 20 November).
+  assert.match(text, /Fri 20 Nov Dentist appointment/, 'next event line');
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-mark'), (c) => c.textContent)),
+    ['20'],
+    'dot on the day with an event'
+  );
+  assert.equal(await page.locator('#landingWidgets .lw-today.lw-mark').count(), 0);
   // Name day card: title is the card's own, no date; first line = the names only.
   const nd = await page.evaluate(() => {
     const c = document.querySelector('#landingWidgets [data-lw="nameday"]');
@@ -214,7 +221,7 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
       days: cells.map((c) => c.textContent),
       weekdays: Array.prototype.map.call(g.querySelectorAll('.lw-weekday'), (c) => c.textContent),
       today: Array.prototype.map.call(g.querySelectorAll('.lw-today'), (c) => c.textContent),
-      classes: Array.from(new Set(Array.prototype.map.call(g.querySelectorAll('.lw-cell'), (c) => c.className.replace(/\s*lw-today/, '')))),
+      classes: Array.from(new Set(Array.prototype.map.call(g.querySelectorAll('.lw-cell'), (c) => c.className.replace(/\s*lw-today/, '').replace(/\s*lw-mark/, '')))),
       rows: g.querySelectorAll('.lw-row').length
     };
   });
@@ -483,6 +490,101 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), [], 'nothing left: nothing shown');
   await weather(page, 0);
   await tvRoom();
+
+  // 9e. Events under the grid: lines (max 2), dots, today's highlight kept, nothing overlapping; none -> no line.
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({
+      events: [
+        { id: 'a', day: 16, month: 11, title: 'Today timed', yearly: true, time: '14:30' },
+        { id: 'b', day: 17, month: 11, title: 'Tomorrow all day', yearly: true },
+        { id: 'c', day: 18, month: 11, title: 'Third is never shown', yearly: true, time: '08:00' },
+        { id: 'd', day: 2, month: 12, title: 'Next month', yearly: true }
+      ]
+    });
+    localStorage.setItem('tvhome.clockFormat', '24h');
+    HomeI18n.refresh();
+    HomeLanding.render();
+  });
+  let lines = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-event'), (e) => e.textContent));
+  assert.deepEqual(lines, ['Today 14:30 Today timed', 'Tomorrow Tomorrow all day'], 'max two lines, in order');
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-mark'), (c) => c.textContent)),
+    ['16', '17', '18'],
+    'dots only for this month'
+  );
+  assert.equal(await page.locator('#landingWidgets .lw-today').textContent(), '16', 'today keeps its highlight (with a dot)');
+  assert.equal(await page.locator('#landingWidgets .lw-today.lw-mark').count(), 1);
+  g = await geo();
+  assert.ok(g.grid && g.stack);
+  const evBox = await page.evaluate(rect('#landingWidgets .lw-events'));
+  assert.ok(evBox.top >= g.grid.top && evBox.bottom <= g.grid.bottom + 1, 'events inside the grid column');
+  assert.ok(g.grid.bottom <= g.dock.top - 20);
+  assert.equal(overlap(g.grid, g.stack), false);
+  assert.equal(overlap(g.grid, g.weather), false);
+  assert.equal(overlap(g.grid, g.buttons), false);
+  assert.equal(
+    await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)),
+    false,
+    'nothing clipped'
+  );
+  // Rows keep a readable size with the events block (cells at least 1.4 line heights).
+  assert.ok(await page.evaluate(() => Array.prototype.every.call(document.querySelectorAll('#landingWidgets .lw-row:not(.lw-weekdays)'), (r) => r.getBoundingClientRect().height >= 30)));
+  // A long title ends with an ellipsis, inside the column.
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [{ id: 'l', day: 16, month: 11, title: 'An extremely long event title that cannot possibly fit in one column line', yearly: true, time: '23:00' }] });
+  });
+  const longEv = await page.evaluate(() => {
+    const e = document.querySelector('#landingWidgets .lw-event');
+    return { cut: e.scrollWidth > e.clientWidth, over: getComputedStyle(e).textOverflow, w: e.getBoundingClientRect().right, grid: document.querySelector('#landingWidgets .lw-grid').getBoundingClientRect().right };
+  });
+  assert.equal(longEv.cut, true);
+  assert.equal(longEv.over, 'ellipsis');
+  assert.ok(longEv.w <= longEv.grid + 0.5);
+  // Little room: the event lines go first (whole lines), the grid itself stays while it fits.
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [{ id: 'a', day: 16, month: 11, title: 'One', yearly: true, time: '14:30' }, { id: 'b', day: 17, month: 11, title: 'Two', yearly: true }] });
+    document.getElementById('dockBand').style.top = '640px';
+    HomeLanding.render();
+  });
+  const tight = await page.evaluate(() => ({ lines: document.querySelectorAll('#landingWidgets .lw-event').length, grid: !!document.querySelector('#landingWidgets .lw-grid'), clip: document.querySelector('#landingWidgets .lw-grid') ? document.querySelector('#landingWidgets .lw-grid').scrollHeight > document.querySelector('#landingWidgets .lw-grid').clientHeight + 1 : false }));
+  assert.equal(tight.clip, false, 'never clipped');
+  assert.ok(tight.lines <= 2);
+  await page.evaluate(() => {
+    document.getElementById('dockBand').style.top = '250px'; // grid cannot fit even without lines
+    HomeLanding.render();
+  });
+  assert.equal(await page.evaluate(() => document.querySelectorAll('#landingWidgets .lw-event').length), 0, 'no event line without a grid');
+  await tvRoom();
+  // No event in range: no line, no dot.
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [{ id: 'f', day: 28, month: 11, title: 'Far', yearly: true }, { id: 'g', day: 3, month: 11, title: 'Passed', yearly: true }] });
+    HomeLanding.render();
+  });
+  assert.equal(await page.locator('#landingWidgets .lw-event').count(), 0);
+  assert.equal(await page.locator('#landingWidgets .lw-events').count(), 0);
+  assert.deepEqual(await page.evaluate(() => HomeCalendar.landingMonth().marked), [3, 28]);
+  // Romanian: Azi / Mâine / weekday day month in Romanian.
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [{ id: 'a', day: 16, month: 11, title: 'Azi test', yearly: true, time: '23:30' }, { id: 'b', day: 17, month: 11, title: 'Mâine test', yearly: true }, ] });
+    localStorage.setItem('tvhome.language', 'ro');
+    HomeI18n.refresh();
+    HomeLanding.render();
+  });
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-event'), (e) => e.textContent)),
+    ['Azi 23:30 Azi test', 'Mâine Mâine test']
+  );
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [{ id: 'a', day: 21, month: 11, title: 'Meci', yearly: true, time: '18:00' }] });
+  });
+  assert.match(await page.locator('#landingWidgets .lw-event').first().textContent(), /^Sâm 21 nov 18:00 Meci$/);
+  await page.evaluate(() => {
+    localStorage.removeItem('tvhome.language');
+    localStorage.removeItem('tvhome.clockFormat');
+    HomeI18n.refresh();
+    HomeInfo.calendar.set({ events: [{ id: 'e1', day: 20, month: 11, title: 'Dentist appointment', yearly: true }] });
+    HomeLanding.render();
+  });
 
   // 10. Long team names: the card keeps its width, names are cut with an ellipsis.
   await seed(page, { long: true });

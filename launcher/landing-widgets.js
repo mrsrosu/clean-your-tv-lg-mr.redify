@@ -136,7 +136,9 @@
         row.appendChild(
           el(
             'span',
-            'lw-cell' + (day === data.today ? ' lw-today' : ''),
+            'lw-cell' +
+              (day === data.today ? ' lw-today' : '') +
+              (day && data.marked && data.marked.indexOf(day) >= 0 ? ' lw-mark' : ''),
             day ? String(day) : ''
           )
         );
@@ -185,7 +187,18 @@
       data;
     if (w.calendar && root.HomeCalendar && root.HomeCalendar.landingMonth) {
       data = safe(root.HomeCalendar.landingMonth, null);
-      if (data) out.grid = monthGrid(data);
+      if (data) {
+        out.grid = monthGrid(data);
+        // The next own events (at most 2 lines) under the grid; nothing when there are none.
+        var events = safe(root.HomeCalendar.landingEvents, []);
+        if (events.length) {
+          var box = el('div', 'lw-events');
+          events.slice(0, 2).forEach(function (e) {
+            box.appendChild(el('div', 'lw-event', e.text));
+          });
+          out.grid.appendChild(box);
+        }
+      }
     }
     if (w.nameday && root.HomeCalendar && root.HomeCalendar.landingNameDay) {
       data = safe(root.HomeCalendar.landingNameDay, null);
@@ -400,10 +413,19 @@
       top = place(grid, left, c.width, b);
       alignFirstText(grid, lineY);
       top = parseFloat(grid.style.top);
-      if (
-        (b.weatherRight && left < b.weatherRight + GAP) ||
-        !fitGrid(grid, bottom - top, 34)
-      ) {
+      var fitted = !(b.weatherRight && left < b.weatherRight + GAP);
+      // Whole event lines that do not fit are dropped (the last first), never clipped.
+      while (fitted && !fitGrid(grid, bottom - top, 34)) {
+        var lines = grid.querySelectorAll('.lw-event');
+        if (!lines.length) {
+          fitted = false;
+          break;
+        }
+        lines[lines.length - 1].parentNode.removeChild(lines[lines.length - 1]);
+        var box2 = grid.querySelector('.lw-events');
+        if (box2 && !box2.children.length) box2.parentNode.removeChild(box2);
+      }
+      if (!fitted) {
         host.removeChild(grid);
         dropped = true;
       }
