@@ -116,6 +116,9 @@
   align-items: center;
   margin: 10px 0;
 }
+.cal-tab .cal-field[hidden] {
+  display: none;
+}
 .cal-tab .cal-field-label {
   display: inline-block;
   min-width: 160px;

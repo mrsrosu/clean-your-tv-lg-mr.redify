@@ -16,6 +16,7 @@
     DAY = 86400000,
     MAX_EVENTS = 50,
     MAX_TITLE = 60,
+    TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/,
     DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
     MONTHS = [
       'January',
@@ -168,6 +169,8 @@
         title: title,
         yearly: e.yearly
       };
+      // Optional time of day, 24 h "HH:MM"; anything else drops the time, not the event (all day).
+      if (typeof e.time === 'string' && TIME_RE.test(e.time)) item.time = e.time;
       if (
         !e.yearly &&
         typeof e.year === 'number' &&
@@ -223,14 +226,37 @@
       return fallback;
     }
   }
+  // Events of one day: all-day first, then by time.
   function eventsOn(events, y, m, d) {
-    return events.filter(function (e) {
-      return (
-        e.month === m &&
-        e.day === d &&
-        (e.yearly || e.year === undefined || e.year === y)
-      );
-    });
+    return events
+      .filter(function (e) {
+        return (
+          e.month === m &&
+          e.day === d &&
+          (e.yearly || e.year === undefined || e.year === y)
+        );
+      })
+      .map(function (e, i) {
+        return { e: e, i: i };
+      })
+      .sort(function (a, b) {
+        var x = a.e.time || '',
+          y2 = b.e.time || '';
+        return x === y2 ? a.i - b.i : x < y2 ? -1 : 1;
+      })
+      .map(function (p) {
+        return p.e;
+      });
+  }
+  // "14:30" in the Home clock format (12 h or 24 h); plain 24 h when the formatter is not available.
+  function timeText(time) {
+    var h = parseInt(time.slice(0, 2), 10),
+      m = parseInt(time.slice(3, 5), 10);
+    try {
+      if (root.HomeI18n && root.HomeI18n.formatTime)
+        return root.HomeI18n.formatTime(new Date(2000, 0, 1, h, m), false);
+    } catch (_) {}
+    return time;
   }
   function el(tag, cls, text) {
     var e = doc.createElement(tag);
@@ -368,7 +394,7 @@
     if (holidays.length) line(t('Holiday'), holidays.join(', '));
     if (names.length) line(t('Name day'), names.join(', '));
     own.forEach(function (e) {
-      line(t('Your event'), e.title);
+      line(t('Your event'), (e.time ? timeText(e.time) + ' ' : '') + e.title);
     });
     if (!holidays.length && !names.length && !own.length)
       box.appendChild(el('div', 'cal-none', t('Nothing planned')));
@@ -431,18 +457,23 @@
     return b;
   }
   function buildTab(pane) {
-    var form = { day: 1, month: 1, yearly: true },
+    var form = { day: 1, month: 1, yearly: true, allDay: true, hour: 9, minute: 0 },
       status = el('div', 'cal-status'),
       list = el('div', 'cal-events'),
       count = el('div', 'cal-count'),
       dayValue = el('span', 'cal-value'),
+      hourValue = el('span', 'cal-value'),
+      minuteValue = el('span', 'cal-value'),
+      allDay = button('cal-allday'),
       monthValue = el('span', 'cal-value'),
       yearly = button('cal-yearly'),
       input = el('input', 'cal-title-input'),
       add = button('cal-add', t('Add event')),
       mon = button('cal-start-mon', t('Monday')),
       sun = button('cal-start-sun', t('Sunday')),
-      weeknum = button('cal-weeknum');
+      weeknum = button('cal-weeknum'),
+      hourRow = null,
+      minuteRow = null;
     pane.classList.add('cal-tab');
     // The date fields start on today's date, re-read while untouched (the TV can stay on for days).
     var touched = false;
@@ -483,6 +514,11 @@
       monthValue.textContent = monthName(form.month);
       yearly.textContent = form.yearly ? t('Yes') : t('No');
       toggle(yearly, form.yearly);
+      allDay.textContent = form.allDay ? t('On') : t('Off');
+      toggle(allDay, form.allDay);
+      hourValue.textContent = two(form.hour);
+      minuteValue.textContent = two(form.minute);
+      if (hourRow) hourRow.hidden = minuteRow.hidden = form.allDay;
     }
     function refreshList(focusIndex) {
       var events = calendar.get().events;
@@ -499,6 +535,7 @@
               '.' +
               two(e.month) +
               (!e.yearly && e.year ? '.' + e.year : '') +
+              (e.time ? ' ' + timeText(e.time) : '') +
               '  ' +
               e.title
           )
@@ -572,6 +609,7 @@
       row.appendChild(value);
       row.appendChild(up);
       s3.appendChild(row);
+      return row;
     }
     stepper('Day', dayValue, function (step) {
       var max = DAYS[form.month - 1];
@@ -580,6 +618,29 @@
     });
     stepper('Month', monthValue, function (step) {
       form.month = ((form.month - 1 + step + 12) % 12) + 1;
+      refreshForm();
+    });
+    // All day (default ON) or a time: Hour 0-23 and Minute 0-55 in steps of 5, both wrapping.
+    var allDayRow = el('div', 'cal-field');
+    allDayRow.appendChild(el('span', 'cal-field-label', t('All day')));
+    allDay.onclick = function () {
+      form.allDay = !form.allDay;
+      if (!form.allDay) {
+        // Switched to a time: the next full hour from now.
+        var n = safe(clock, null) || new Date();
+        form.hour = (n.getHours() + 1) % 24;
+        form.minute = 0;
+      }
+      refreshForm();
+    };
+    allDayRow.appendChild(allDay);
+    s3.appendChild(allDayRow);
+    hourRow = stepper('Hour', hourValue, function (step) {
+      form.hour = (form.hour + step + 24) % 24;
+      refreshForm();
+    });
+    minuteRow = stepper('Minute', minuteValue, function (step) {
+      form.minute = (form.minute + step * 5 + 60) % 60;
       refreshForm();
     });
     var titleRow = el('div', 'cal-field');
@@ -621,6 +682,7 @@
           title: title,
           yearly: form.yearly
         };
+      if (!form.allDay) item.time = two(form.hour) + ':' + two(form.minute);
       if (!form.yearly && base) {
         // One-off: next time this date comes round.
         var passed =
@@ -656,10 +718,18 @@
       weekdays = [],
       i;
     for (i = 0; i < 7; i++) weekdays.push(weekdayName((start + i) % 7, true));
+    var events = safe(calendar.get, { events: [] }).events,
+      marked = [],
+      day;
+    // Days of this month with an own event (a one-off only in its own year): a dot under the number.
+    for (day = 1; day <= daysIn(today.year, today.month); day++)
+      if (eventsOn(events, today.year, today.month, day).length)
+        marked.push(day);
     return {
       title: monthName(today.month) + ' ' + today.year,
       weekdays: weekdays,
       today: today.day,
+      marked: marked,
       rows: grid.map(function (row) {
         return row.map(function (cell) {
           return cell.inMonth ? cell.day : 0;
@@ -692,7 +762,59 @@
       : null;
   }
 
+  // Short month name for the events line: English table, Romanian from the catalogue, others from the engine.
+  var SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function shortMonth(month) {
+    var key = SHORT_MONTHS[month - 1];
+    if (!root.HomeI18n || /^en/.test(root.HomeI18n.language())) return key;
+    var text = t(key + ' (month)');
+    if (text !== key + ' (month)') return text;
+    try {
+      return root.HomeI18n.formatDate(new Date(2026, month - 1, 15), { month: 'short' }) || key;
+    } catch (_) {
+      return key;
+    }
+  }
+  // Next own events from now, stored data only: today's all-day events, today's timed events not yet passed, then the
+  // following 7 days (all-day first, then by time). At most 2 lines { text, when, time, title }:
+  // "Today 14:30 Title", "Tomorrow 09:00 Title", "Fri 21 Nov 18:00 Title"; all-day events carry no time.
+  function landingEvents() {
+    var now = safe(clock, null),
+      today = readToday();
+    if (!now || !today || !calendar) return [];
+    var events = safe(calendar.get, { events: [] }).events,
+      minutes = now.getHours() * 60 + now.getMinutes(),
+      out = [],
+      i,
+      day,
+      list;
+    for (i = 0; i <= 7 && out.length < 2; i++) {
+      day = i ? shift(today, i) : today;
+      list = eventsOn(events, day.year, day.month, day.day);
+      list.forEach(function (e) {
+        if (out.length >= 2) return;
+        // Today: a timed event is shown until its minute is over.
+        if (i === 0 && e.time && parseInt(e.time.slice(0, 2), 10) * 60 + parseInt(e.time.slice(3, 5), 10) < minutes)
+          return;
+        var when =
+          i === 0
+            ? t('Today')
+            : i === 1
+              ? t('Tomorrow')
+              : weekdayName(weekdayOf(day.year, day.month, day.day), true) + ' ' + day.day + ' ' + shortMonth(day.month);
+        out.push({
+          when: when,
+          time: e.time ? timeText(e.time) : '',
+          title: e.title,
+          text: when + (e.time ? ' ' + timeText(e.time) : '') + ' ' + e.title
+        });
+      });
+    }
+    return out;
+  }
+
   root.HomeCalendar = {
+    landingEvents: landingEvents,
     landingMonth: landingMonth,
     landingNameDay: landingNameDay,
     monthGrid: monthGrid,

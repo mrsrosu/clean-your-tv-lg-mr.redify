@@ -160,6 +160,88 @@ test('sanitize: events not an array -> [] (also from corrupt storage)', () => {
     landing: false
   });
 });
+const cev = (id, day, month, title, extra) => Object.assign({ id, day, month, title, yearly: true }, extra);
+test('sanitize: optional time HH:MM (24 h); an invalid time drops the time, not the event; old events unchanged', () => {
+  const C = context(memory()).HomeCalendar,
+    list = C.sanitizeEvents([
+      cev('a', 1, 2, 'A'),
+      cev('b', 1, 2, 'B', { time: '14:30' }),
+      cev('c', 1, 2, 'C', { time: '24:00' }),
+      cev('d', 1, 2, 'D', { time: '9:05' }),
+      cev('e', 1, 2, 'E', { time: '12:60' }),
+      cev('f', 1, 2, 'F', { time: 1430 }),
+      cev('g', 1, 2, 'G', { time: '00:00' }),
+      cev('h', 1, 2, 'H', { time: '23:59' }),
+      cev('i', 1, 2, 'I', { time: '' })
+    ]);
+  assert.equal(list.length, 9, 'no event is lost');
+  assert.deepEqual(list.map((x) => x.time || null), [null, '14:30', null, null, null, null, '00:00', '23:59', null]);
+  assert.equal('time' in list[0], false, 'an old event has no time key');
+  assert.deepEqual(list[0], { id: 'a', day: 1, month: 2, title: 'A', yearly: true });
+  assert.equal(C.sanitizeEvents(Array.from({ length: 60 }, (_, i) => cev('x' + i, 1, 2, 'T', { time: '10:00' }))).length, 50);
+});
+test('stored events with and without time load unchanged; corrupt time values are safe', () => {
+  const mem = memory({
+    'tvhome.calendar.v1': JSON.stringify({ events: [cev('a', 3, 4, 'Old'), cev('b', 3, 4, 'New', { time: '08:15' }), cev('c', 3, 4, 'Bad', { time: { x: 1 } })] })
+  });
+  const got = context(mem).HomeInfo.calendar.get().events;
+  assert.deepEqual(got.map((x) => [x.id, x.time || null]), [['a', null], ['b', '08:15'], ['c', null]]);
+});
+function landing(events, now) {
+  const mem = memory(),
+    ctx = context(mem);
+  ctx.HomeCalendar.setClock(() => now);
+  ctx.HomeInfo.calendar.set({ events });
+  return ctx.HomeCalendar;
+}
+test('landingMonth.marked: days of the current month with an own event (yearly and one-off), other months excluded', () => {
+  const now = new Date(2026, 10, 16, 12, 0),
+    C = landing(
+      [
+        cev('a', 20, 11, 'Yearly'),
+        cev('b', 5, 11, 'One-off', { yearly: false, year: 2026 }),
+        cev('c', 7, 11, 'Other year', { yearly: false, year: 2025 }),
+        cev('d', 9, 12, 'December'),
+        cev('e', 20, 11, 'Same day twice', { time: '10:00' }),
+        cev('f', 30, 11, 'Last day')
+      ],
+      now
+    ),
+    m = C.landingMonth();
+  assert.deepEqual(m.marked, [5, 20, 30]);
+  assert.equal(m.today, 16);
+  assert.deepEqual(landing([], now).landingMonth().marked, []);
+});
+test('landingEvents: today all-day, today not passed, tomorrow, within 7 days; 8 days none; max 2 lines; empty', () => {
+  const noon = new Date(2026, 10, 16, 12, 30), // Monday
+    L = (events, now) => landing(events, now || noon).landingEvents().map((x) => x.text);
+  assert.deepEqual(L([]), []);
+  assert.deepEqual(L([cev('a', 16, 11, 'Passed', { time: '09:00' })]), [], 'passed today');
+  assert.deepEqual(L([cev('a', 16, 11, 'Soon', { time: '12:30' })]), ['Today 12:30 Soon'], 'the current minute is not passed');
+  assert.deepEqual(L([cev('a', 16, 11, 'Later', { time: '18:00' })]), ['Today 18:00 Later']);
+  assert.deepEqual(L([cev('a', 16, 11, 'Whole day')]), ['Today Whole day'], 'all-day: no time');
+  assert.deepEqual(L([cev('a', 17, 11, 'Dentist', { time: '09:00' })]), ['Tomorrow 09:00 Dentist']);
+  assert.deepEqual(L([cev('a', 21, 11, 'Match', { time: '18:00' })]), ['Sat 21 Nov 18:00 Match']);
+  assert.deepEqual(L([cev('a', 23, 11, 'Edge')]), ['Mon 23 Nov Edge'], 'day +7');
+  assert.deepEqual(L([cev('a', 24, 11, 'Too far')]), [], 'day +8');
+  assert.deepEqual(L([cev('a', 16, 11, 'Past', { yearly: false, year: 2025 })]), [], 'one-off of another year');
+  // Order: today all-day, today timed by time, then the following days; at most two lines.
+  const many = L([
+    cev('1', 17, 11, 'Tomorrow all day'),
+    cev('2', 16, 11, 'Timed', { time: '20:00' }),
+    cev('3', 16, 11, 'All day'),
+    cev('4', 16, 11, 'Earlier timed', { time: '15:00' })
+  ]);
+  assert.deepEqual(many, ['Today All day', 'Today 15:00 Earlier timed']);
+  assert.deepEqual(L([cev('1', 18, 11, 'B'), cev('2', 17, 11, 'A', { time: '10:00' }), cev('3', 17, 11, 'A0')]), ['Tomorrow A0', 'Tomorrow 10:00 A']);
+  // Once the minute is over the event disappears.
+  const C = landing([cev('a', 16, 11, 'Soon', { time: '12:30' })], noon);
+  assert.equal(C.landingEvents().length, 1);
+  C.setClock(() => new Date(2026, 10, 16, 12, 31));
+  assert.equal(C.landingEvents().length, 0);
+  // Year boundary: 29 December looks 7 days ahead into January.
+  assert.deepEqual(L([cev('a', 3, 1, 'New year')], new Date(2026, 11, 29, 8, 0)), ['Sun 3 Jan New year']);
+});
 test('isoWeek', () => {
   const C = context(memory()).HomeCalendar;
   assert.equal(C.isoWeek(2026, 1, 1), 1);

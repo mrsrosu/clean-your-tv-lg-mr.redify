@@ -220,6 +220,84 @@ const assert = require('node:assert/strict'),
     await page.evaluate(() => HomeInfo.calendar.get().events.length),
     0
   );
+  // 4b. Event time: "All day" (default ON) or Hour / Minute steppers; next full hour from now when switched OFF.
+  await setup('2026-04-10T12:20:00');
+  await page.evaluate(() => {
+    localStorage.setItem('tvhome.clockFormat', '24h');
+    HomeI18n.refresh();
+  });
+  await page.evaluate(() => RenewalPanel.open());
+  await page.locator('[data-category="calendar"]').click();
+  const allDay = pane.locator('.cal-allday'),
+    hourRow = pane.locator('.cal-hour-up'),
+    minuteRow = pane.locator('.cal-minute-up');
+  assert.equal(await allDay.innerText(), 'On', 'all day by default');
+  assert.equal(await hourRow.isVisible(), false, 'no hour stepper while all day');
+  assert.equal(await minuteRow.isVisible(), false);
+  // An all-day event.
+  await pane.locator('.cal-title-input').fill('Holiday trip');
+  await pane.locator('.cal-add').click();
+  assert.equal(await page.evaluate(() => 'time' in HomeInfo.calendar.get().events[0]), false, 'all-day: no time stored');
+  // OFF: steppers appear on the next full hour (12:20 -> 13:00).
+  await allDay.click();
+  assert.equal(await allDay.innerText(), 'Off');
+  assert.equal(await hourRow.isVisible(), true);
+  assert.equal(await minuteRow.isVisible(), true);
+  const vals = () => pane.locator('.cal-field .cal-value').allInnerTexts();
+  assert.deepEqual((await vals()).slice(2), ['13', '00'], 'default: next full hour');
+  // Hour wraps 23 -> 0 and 0 -> 23; minute steps by 5 and wraps 55 -> 0 and 0 -> 55.
+  for (let i = 0; i < 11; i++) await pane.locator('.cal-hour-up').click();
+  assert.equal((await vals())[2], '00', '13 + 11 = 24 -> 00');
+  await pane.locator('.cal-hour-down').click();
+  assert.equal((await vals())[2], '23');
+  await pane.locator('.cal-hour-up').click();
+  for (let i = 0; i < 11; i++) await pane.locator('.cal-minute-up').click();
+  assert.equal((await vals())[3], '55');
+  await pane.locator('.cal-minute-up').click();
+  assert.equal((await vals())[3], '00', '55 -> 00');
+  await pane.locator('.cal-minute-down').click();
+  assert.equal((await vals())[3], '55', '00 -> 55');
+  for (let i = 0; i < 9; i++) await pane.locator('.cal-minute-down').click();
+  assert.equal((await vals())[3], '10');
+  for (let i = 0; i < 14; i++) await pane.locator('.cal-hour-up').click(); // 00 -> 14
+  await pane.locator('.cal-title-input').fill('Dentist');
+  await pane.locator('.cal-add').click();
+  const timed = await page.evaluate(() => HomeInfo.calendar.get().events.map((e) => [e.title, e.time || null]));
+  assert.deepEqual(timed, [['Holiday trip', null], ['Dentist', '14:10']]);
+  // The list shows the time; same-day order is all-day first, then by time (also in the page's day detail).
+  const listText = await pane.locator('.cal-event-text').allInnerTexts();
+  assert.match(listText[0], /Holiday trip/);
+  assert.doesNotMatch(listText[0], /\d\d:\d\d/);
+  assert.match(listText[1], /\s14:10\s+Dentist/);
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({
+      events: [
+        { id: 'q1', day: 10, month: 4, title: 'Late', yearly: true, time: '18:00' },
+        { id: 'q2', day: 10, month: 4, title: 'Early', yearly: true, time: '07:30' },
+        { id: 'q3', day: 10, month: 4, title: 'All day', yearly: true }
+      ]
+    });
+    document.getElementById('renewalClose').click();
+  });
+  await open();
+  const detailTexts = await page.locator("#infoPanel .cal-detail .cal-line .cal-text").allInnerTexts();
+  assert.deepEqual(detailTexts.slice(-3), ['All day', '07:30 Early', '18:00 Late'], 'all-day first, then by time');
+  await page.evaluate(() => InfoPanel.close());
+  // 12-hour Home clock format: the stored time stays 24 h, the display follows the clock setting.
+  await page.evaluate(() => {
+    localStorage.setItem('tvhome.clockFormat', '12h');
+    HomeI18n.refresh();
+  });
+  await open();
+  assert.match((await page.locator('#infoPanel .cal-detail .cal-line .cal-text').allInnerTexts()).slice(-1)[0], /^(6:00|06:00)\s?PM Late$/i);
+  assert.equal(await page.evaluate(() => HomeInfo.calendar.get().events.find((e) => e.title === 'Late').time), '18:00');
+  await page.evaluate(() => {
+    localStorage.removeItem('tvhome.clockFormat');
+    HomeI18n.refresh();
+    InfoPanel.close();
+  });
+  await page.evaluate(() => HomeInfo.calendar.set({ events: [] }));
+
   // Limit 50.
   await page.evaluate(() => {
     const list = [];

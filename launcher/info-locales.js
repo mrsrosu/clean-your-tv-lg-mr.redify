@@ -103,6 +103,23 @@ HomeI18n.add({
     'At most 5 teams': 'Cel mult 5 echipe',
     'Football data unavailable': 'Datele de fotbal nu sunt disponibile',
     'National teams': 'Echipe naționale',
+    'All day': 'Toată ziua',
+    'Hour': 'Ora',
+    'Minute': 'Minutul',
+    'Today': 'Azi',
+    'Tomorrow': 'Mâine',
+    'Jan (month)': 'ian',
+    'Feb (month)': 'feb',
+    'Mar (month)': 'mar',
+    'Apr (month)': 'apr',
+    'May (month)': 'mai',
+    'Jun (month)': 'iun',
+    'Jul (month)': 'iul',
+    'Aug (month)': 'aug',
+    'Sep (month)': 'sep',
+    'Oct (month)': 'oct',
+    'Nov (month)': 'nov',
+    'Dec (month)': 'dec',
     'Romania': 'România'
   }
 });

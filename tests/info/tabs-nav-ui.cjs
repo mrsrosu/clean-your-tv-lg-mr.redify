@@ -20,19 +20,27 @@ const assert = require('node:assert/strict'),
     HomeInfo.football.set({ competitions: ['eng.1', 'nat'], teams: [{ competition: 'nat', id: '473', name: 'Romania' }] });
     RenewalPanel.open();
   });
-  const ids = ['idle', 'daily', 'calendar', 'football'];
+  // The calendar form is walked twice: all day (Hour / Minute rows hidden) and with a time (both rows reachable).
+  const ids = ['idle', 'daily', 'calendar', 'calendar+time', 'football'];
   // Controls are addressed by their index among the visible focusable controls (a tab may redraw its DOM on focus).
   const LIST = (id) =>
     `Array.prototype.filter.call(document.getElementById('settings-pane-${id}').querySelectorAll('button, input, select, a[href], [tabindex]'), (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.disabled && e.tabIndex >= 0; })`;
   const focusAt = (id, i) => page.evaluate(`(${LIST(id)})[${i}].focus()`);
   const activeIndex = (id) => page.evaluate(`(${LIST(id)}).indexOf(document.activeElement)`);
-  for (const id of ids) {
+  for (let id of ids) {
+    const withTime = id === 'calendar+time';
+    id = withTime ? 'calendar' : id;
     await page.locator('[data-category="' + id + '"]').click();
+    if (withTime) await page.locator('#settings-pane-calendar .cal-allday').click();
     await page.waitForTimeout(300);
     await focusAt(id, 0); // lets a tab load its data (football lists teams on first focus) before it is measured
     await page.waitForTimeout(500);
     const info = (await page.evaluate(`(${LIST(id)}).map((e, i) => ({ nav: i, name: (e.className || e.tagName) + '|' + (e.textContent || e.value || '').trim().slice(0, 24), top: Math.round(e.getBoundingClientRect().top), pressed: e.hasAttribute('aria-pressed'), cls: e.className }))`));
     assert.ok(info.length >= 2, id + ': controls found');
+    if (id === 'calendar')
+      ['cal-hour-up', 'cal-hour-down', 'cal-minute-up', 'cal-minute-down'].forEach((c) =>
+        assert.equal(info.some((x) => x.cls.indexOf(c) >= 0), withTime, c + (withTime ? ' reachable with a time' : ' hidden while all day'))
+      );
     // Visual rows (controls whose tops are within 8 px); Down/Up must reach every ROW in order, Right/Left every
     // control inside a row.
     const rows = [];
