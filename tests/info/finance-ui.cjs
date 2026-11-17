@@ -53,8 +53,8 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
   await page.waitForSelector('#infoPanel .fin-row');
   const r1 = await rows();
   assert.equal(r1.length, 4);
-  assert.match(r1[0], /^EUR 5\.3494 RON/);
-  assert.match(r1[1], /^USD 4\.8600 RON/);
+  assert.match(r1[0], /^EUR 5\.349 RON/);
+  assert.match(r1[1], /^USD 4\.860 RON/);
   assert.match(await text(), new RegExp(fixtureDate));
   assert.equal(
     await page
@@ -107,7 +107,7 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
     .locator('#infoPanel .info-tab', { hasText: 'Exchange rates' })
     .click();
   await page.waitForSelector('#infoPanel .fin-row');
-  assert.match((await rows())[0], /^HUF 100 = 1\.4662 RON/);
+  assert.match((await rows())[0], /^HUF 100 = 1\.466 RON/);
 
   // 4. Service without bnrRates: message, no values, never throws.
   for (const reply of [

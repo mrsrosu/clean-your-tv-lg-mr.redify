@@ -272,7 +272,7 @@ const assert = require('node:assert/strict'),
   await page.clock.runFor(5 * MIN + 1000);
   assert.match(
     await page.locator('#idleScreen .idle-block-rates').innerText(),
-    /EUR 4\.9700/
+    /EUR 4\.970/
   );
   assert.match(
     await page.locator('#idleScreen .idle-block-football').innerText(),

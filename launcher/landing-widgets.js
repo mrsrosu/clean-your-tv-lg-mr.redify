@@ -2,7 +2,7 @@
  *
  * The top area of Home is three columns on one row under the clock and date: the weather block (left, unchanged),
  * a month calendar grid of the current month (middle, no markings: today only) and a stack of small glass cards
- * (right, right edge 1808): Name day, Exchange rates, Football. Each shows only when its "Show on main page" toggle
+ * (right, right edge 1808): Exchange rates, Events, Football; the Name day is in the top row, right of the date block. Each shows only when its "Show on main page" toggle
  * (Settings) is ON and it has data; the grid belongs to the Calendar tab toggle, Name day to the second toggle of the
  * Rates & holidays tab, Exchange to its first one, Football to the Football tab. Nothing without data is shown (no error
  * text). Data is read from storage (HomeCalendar.landingMonth / landingNameDay, HomeInfoFinance.landingCard,
@@ -101,19 +101,19 @@
     svg.appendChild(path);
     return svg;
   }
-  function card(id, title, meta) {
+  function card(id, title, meta, iconId) {
     var c = el('div', 'lw-card lw-' + id),
       head = el('div', 'lw-head');
     c.setAttribute('data-lw', id);
-    head.appendChild(icon(id));
+    head.appendChild(icon(iconId || id));
     head.appendChild(el('span', 'lw-label', title));
     if (meta) head.appendChild(el('span', 'lw-meta', meta));
     c.appendChild(head);
     return c;
   }
   // level 1 = compact: one line per card (the titles stay), used when level 0 does not fit.
-  function textCard(id, data, level) {
-    var c = card(id, data.title, data.meta);
+  function textCard(id, data, level, iconId) {
+    var c = card(id, data.title, data.meta, iconId);
     (level ? (data.lines || []).slice(0, 1) : data.lines || []).forEach(function (line) {
       c.appendChild(el('div', 'lw-line', line));
     });
@@ -180,33 +180,38 @@
     });
     return c;
   }
-  // { grid: node | null, cards: [node] } for the toggles that are ON and have data.
+  // Name day of the top row (left of the header buttons, on the clock's line): plain text, a small label and its lines.
+  function topNameDay(data) {
+    var n = el('div', 'lw-top');
+    n.setAttribute('data-lw', 'nameday');
+    n.appendChild(el('div', 'lw-toplabel', data.title));
+    (data.lines || []).forEach(function (line) {
+      n.appendChild(el('div', 'lw-topline', line));
+    });
+    return n;
+  }
+  // { top: node | null, grid: node | null, cards: [node] }: the top-row Name day, the month grid (dots only) and the
+  // stack Exchange, Events, Football. Name day, Exchange and Football only with data; Events is never empty.
   function build(level) {
     var w = wanted(),
-      out = { grid: null, cards: [] },
+      out = { top: null, grid: null, cards: [] },
+      cal = root.HomeCalendar,
       data;
-    if (w.calendar && root.HomeCalendar && root.HomeCalendar.landingMonth) {
-      data = safe(root.HomeCalendar.landingMonth, null);
-      if (data) {
-        out.grid = monthGrid(data);
-        // The next own events (at most 2 lines) under the grid; nothing when there are none.
-        var events = safe(root.HomeCalendar.landingEvents, []);
-        if (events.length) {
-          var box = el('div', 'lw-events');
-          events.slice(0, 2).forEach(function (e) {
-            box.appendChild(el('div', 'lw-event', e.text));
-          });
-          out.grid.appendChild(box);
-        }
-      }
+    if (w.calendar && cal && cal.landingMonth) {
+      data = safe(cal.landingMonth, null);
+      if (data) out.grid = monthGrid(data);
     }
-    if (w.nameday && root.HomeCalendar && root.HomeCalendar.landingNameDay) {
-      data = safe(root.HomeCalendar.landingNameDay, null);
-      if (data) out.cards.push(textCard('nameday', data, level));
+    if (w.nameday && cal && cal.landingNameDay) {
+      data = safe(cal.landingNameDay, null);
+      if (data) out.top = topNameDay(data);
     }
     if (w.rates && root.HomeInfoFinance && root.HomeInfoFinance.landingCard) {
       data = safe(root.HomeInfoFinance.landingCard, null);
       if (data) out.cards.push(textCard('rates', data, level));
+    }
+    if (w.calendar && cal && cal.landingEventsCard) {
+      data = safe(cal.landingEventsCard, null);
+      if (data) out.cards.push(textCard('events', data, level, 'calendar'));
     }
     if (w.football && root.HomeFootball && root.HomeFootball.landingItems) {
       data = safe(root.HomeFootball.landingItems, []);
@@ -289,18 +294,17 @@
   }
   // Removes the least important thing left in the cards stack.
   function dropOne(stack) {
-    var order = ['rates', 'nameday'],
-      i,
-      node,
-      items;
+    var node = stack.querySelector('[data-lw="football"]'),
+      items = node ? node.querySelectorAll('.lw-match') : [],
+      order = ['events', 'rates'],
+      i;
+    // From the end: Football's second event, Football, then Events, then Exchange.
+    if (items.length > 1) return node.removeChild(items[items.length - 1]);
+    if (node) return stack.removeChild(node);
     for (i = 0; i < order.length; i++) {
       node = stack.querySelector('[data-lw="' + order[i] + '"]');
       if (node) return stack.removeChild(node);
     }
-    node = stack.querySelector('[data-lw="football"]');
-    items = node ? node.querySelectorAll('.lw-match') : [];
-    if (items.length > 1) return node.removeChild(items[items.length - 1]);
-    if (node) return stack.removeChild(node);
     return stack.removeChild(stack.lastChild);
   }
   function overflows(node) {
@@ -371,6 +375,33 @@
     w.removeAttribute('data-lw-height');
     w.style.minHeight = '';
   }
+  // The Name day of the top row: right of the date block (+48 px) up to the first header button (-40 px), centred on
+  // the clock row; sizes from the list until its lines fit the row's height. False when there is no room at all.
+  var TOP_SIZES = [26, 24, 22, 20];
+  function placeTop(node) {
+    var surface = doc.getElementById('homeSurface'),
+      timeRow = doc.getElementById('timeRow'),
+      date = doc.getElementById('date'),
+      buttons = doc.getElementById('topButtons'),
+      p,
+      left,
+      right,
+      k;
+    if (!surface || !timeRow || !date) return false;
+    p = at(date, surface);
+    left = p.left + date.offsetWidth + 48;
+    right = buttons ? at(buttons, surface).left - 40 : RIGHT - 416 - 40;
+    if (right - left < 160) return false;
+    node.style.left = left + 'px';
+    node.style.width = right - left + 'px';
+    p = at(timeRow, surface);
+    for (k = 0; k < TOP_SIZES.length; k++) {
+      node.style.fontSize = TOP_SIZES[k] + 'px';
+      if (node.offsetHeight <= timeRow.offsetHeight) break;
+    }
+    node.style.top = p.top + Math.max(0, (timeRow.offsetHeight - node.offsetHeight) / 2) + 'px';
+    return true;
+  }
   function layout(parts) {
     var b = bounds(),
       c = columns(),
@@ -413,22 +444,17 @@
       top = place(grid, left, c.width, b);
       alignFirstText(grid, lineY);
       top = parseFloat(grid.style.top);
-      var fitted = !(b.weatherRight && left < b.weatherRight + GAP);
-      // Whole event lines that do not fit are dropped (the last first), never clipped.
-      while (fitted && !fitGrid(grid, bottom - top, 34)) {
-        var lines = grid.querySelectorAll('.lw-event');
-        if (!lines.length) {
-          fitted = false;
-          break;
-        }
-        lines[lines.length - 1].parentNode.removeChild(lines[lines.length - 1]);
-        var box2 = grid.querySelector('.lw-events');
-        if (box2 && !box2.children.length) box2.parentNode.removeChild(box2);
-      }
-      if (!fitted) {
+      if (
+        (b.weatherRight && left < b.weatherRight + GAP) ||
+        !fitGrid(grid, bottom - top, 34)
+      ) {
         host.removeChild(grid);
         dropped = true;
       }
+    }
+    if (parts.top && !placeTop(parts.top)) {
+      host.removeChild(parts.top);
+      dropped = true;
     }
     host.hidden = host.children.length === 0;
     if (host.hidden) clearWeatherHeight();
@@ -468,10 +494,11 @@
           stack.appendChild(c);
         });
       }
+      if (parts.top) host.appendChild(parts.top);
       if (parts.grid) host.appendChild(parts.grid);
       if (stack) host.appendChild(stack);
       host.hidden = false;
-      if (!layout({ grid: parts.grid, stack: stack })) break;
+      if (!layout({ top: parts.top, grid: parts.grid, stack: stack })) break;
     }
   }
 

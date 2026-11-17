@@ -148,9 +148,9 @@ test('idleLines: one short line per chosen currency, [] without data', () => {
   F.ingest(ctx.HomeInfoFinance.parse(xml));
   const lines = F.idleLines();
   assert.equal(lines.length, 4);
-  assert.equal(lines[0], 'EUR ' + fixtureEur.toFixed(4));
+  assert.equal(lines[0], 'EUR ' + fixtureEur.toFixed(3));
   ctx.HomeInfo.finance.set({ currencies: ['HUF', 'XXX'] });
-  assert.deepEqual(F.idleLines(), ['100 HUF 1.4662']);
+  assert.deepEqual(F.idleLines(), ['100 HUF 1.466']);
 });
 test('arrows against previous, only when previous exists', () => {
   const ctx = context(memory()),
@@ -280,6 +280,39 @@ test('transport: reply without XML or with corrupt XML never rotates', async () 
   const r = await ctx.HomeInfoFinance.refresh();
   assert.notEqual(r.state, 'ok');
   assert.equal(ctx.HomeInfo.finance.get().current, null);
+});
+test('display: 3 decimals everywhere (idle rows, page text); stored values keep 4; arrows use the stored values', () => {
+  const ctx = context(memory()),
+    F = ctx.HomeInfoFinance;
+  F.ingest({ date: '2026-11-13', rates: { EUR: rate(5.3491), USD: rate(4.8604), GBP: rate(2.3454), CHF: rate(2.3456), HUF: rate(1.4662, 100) } });
+  F.ingest({ date: '2026-11-16', rates: { EUR: rate(5.3494), USD: rate(4.8601), GBP: rate(2.3454), CHF: rate(2.3456), HUF: rate(1.4662, 100) } });
+  ctx.HomeInfo.finance.set({ currencies: ['EUR', 'USD', 'GBP', 'CHF', 'HUF'] });
+  assert.deepEqual(F.idleLines(), ['EUR 5.349', 'USD 4.860', 'GBP 2.345', 'CHF 2.346', '100 HUF 1.466'], 'one currency per row');
+  assert.equal(ctx.HomeInfo.finance.get().current.rates.EUR.value, 5.3494, 'stored with 4 decimals');
+  assert.equal(F.trend('EUR'), 1, 'arrow compares stored values (5.3491 -> 5.3494) although both read 5.349');
+  assert.equal(F.trend('USD'), -1);
+  assert.equal(F.trend('GBP'), 0);
+});
+test('landingCard: three currencies per line joined with " · ", at most 2 lines (6 currencies), date meta', () => {
+  const ctx = context(memory()),
+    F = ctx.HomeInfoFinance,
+    all = {};
+  ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK'].forEach((c, i) => (all[c] = rate(1 + i / 7)));
+  F.ingest({ date: '2026-11-16', rates: Object.assign({ HUF: rate(1.4662, 100) }, all) });
+  assert.equal(F.landingCard().meta, '16.11');
+  assert.deepEqual(F.landingCard().lines, ['EUR 1.000 · USD 1.143 · GBP 1.286', 'CHF 1.429']);
+  ctx.HomeInfo.finance.set({ currencies: ['EUR', 'USD', 'GBP'] });
+  assert.deepEqual(F.landingCard().lines, ['EUR 1.000 · USD 1.143 · GBP 1.286'], 'a full line of three');
+  ctx.HomeInfo.finance.set({ currencies: ['EUR'] });
+  assert.deepEqual(F.landingCard().lines, ['EUR 1.000']);
+  ctx.HomeInfo.finance.set({ currencies: ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD'] });
+  assert.deepEqual(F.landingCard().lines, ['EUR 1.000 · USD 1.143 · GBP 1.286', 'CHF 1.429 · JPY 1.571 · CAD 1.714'], 'six currencies in two lines');
+  ctx.HomeInfo.finance.set({ currencies: ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'SEK'] });
+  assert.equal(F.landingCard().lines.length, 2, 'beyond six: not shown on the card');
+  assert.ok(F.landingCard().lines.join(' ').indexOf('AUD') < 0);
+  ctx.HomeInfo.finance.set({ currencies: ['HUF', 'EUR'] });
+  assert.deepEqual(F.landingCard().lines, ['100 HUF 1.466 · EUR 1.000']);
+  assert.deepEqual(F.idleLines().length, 2, 'the idle panel keeps one row per currency');
 });
 // ---- BNR schedule (injected clock): requests only at 13:05 / 14:05 Romanian time of banking days ----
 const UTC = (iso, hm) => Date.parse(iso + 'T' + hm + ':00Z');

@@ -28,7 +28,8 @@ body.idle-active #landingWidgets,
   box-sizing: border-box;
 }
 #landingWidgets .lw-grid,
-#landingWidgets .lw-stack {
+#landingWidgets .lw-stack,
+#landingWidgets .lw-top {
   position: absolute;
   overflow: hidden;
   line-height: 1.2;
@@ -41,7 +42,8 @@ body.idle-active #landingWidgets,
   padding: 10px 0 0;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
-#landingWidgets .lw-card:first-child {
+#landingWidgets .lw-card:first-child,
+#landingWidgets .lw-card.lw-grid {
   padding-top: 0;
   border-top: 0;
 }
@@ -181,16 +183,23 @@ body.idle-active #landingWidgets,
   background-color: currentColor;
   opacity: 0.9;
 }
-#landingWidgets .lw-events {
-  flex: none;
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-#landingWidgets .lw-event {
+/* Name day in the top row (right of the date block, on the clock's line): the date's look, a small label and lines. */
+#landingWidgets .lw-top {
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  font-size: 26px;
+  line-height: 1.25;
+}
+#landingWidgets .lw-toplabel {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
   font-size: 0.85em;
-  line-height: 1.3;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#landingWidgets .lw-topline {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

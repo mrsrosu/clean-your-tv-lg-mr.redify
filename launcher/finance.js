@@ -164,7 +164,7 @@
       (r.multiplier > 1 ? r.multiplier + ' ' : '') +
       code +
       ' ' +
-      r.value.toFixed(4)
+      r.value.toFixed(3) // shown with 3 decimals; the stored value keeps BNR's 4
     );
   }
   function idleLines() {
@@ -178,17 +178,17 @@
     return out;
   }
 
-  // Main-page card (landing-widgets.js): the chosen currencies in two lines of two (at most 4) and the BNR publication
-  // date, from the stored data only. null without data.
+  // Main-page card (landing-widgets.js): the chosen currencies, three per line joined with " · ", at most 2 lines (6
+  // currencies), and the BNR publication date, from the stored data only. null without data.
   function landingCard() {
     var s = store && store.get(),
-      all = idleLines().slice(0, 4),
+      all = idleLines().slice(0, 6),
       lines = [],
       m,
       i;
     if (!s || !s.current || !all.length) return null;
-    for (i = 0; i < all.length; i += 2)
-      lines.push(all.slice(i, i + 2).join('  '));
+    for (i = 0; i < all.length; i += 3)
+      lines.push(all.slice(i, i + 3).join(' · '));
     m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s.current.date);
     return {
       title: t('Exchange rates'),
@@ -496,7 +496,7 @@
             'fin-value',
             r
               ? (r.multiplier > 1 ? r.multiplier + ' = ' : '') +
-                  r.value.toFixed(4) +
+                  r.value.toFixed(3) +
                   ' RON'
               : '–'
           )

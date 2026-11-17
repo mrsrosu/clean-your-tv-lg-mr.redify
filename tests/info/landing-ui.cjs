@@ -92,7 +92,7 @@ const state = (page) => page.evaluate(() => HomeLanding.state());
 const visible = (page) => page.evaluate(() => HomeLanding.visible());
 const ALL = { calendar: true, nameday: true, rates: true, football: true };
 const NONE = { calendar: false, nameday: false, rates: false, football: false };
-const ORDER = ['calendar', 'nameday', 'rates', 'football'];
+const ORDER = ['nameday', 'calendar', 'rates', 'events', 'football'];
 // Real weather block (forecast format, 3 days) from a seeded cache: the same data the TV showed. A width overrides it to
 // simulate a wider block (compact format / large scale); no width renders the real one again.
 const WEATHER_SEED = {
@@ -157,7 +157,7 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
   assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 0, football: 0 });
 
-  // 2. All ON: grid, Name day, Exchange, Football in that order, with data.
+  // 2. All ON: Name day (top row), grid, then the stack Exchange, Events, Football, with data.
   await toggles(page, ALL);
   s = await state(page);
   assert.deepEqual(s.cards, ORDER);
@@ -166,45 +166,60 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   const text = await page.evaluate(() => document.getElementById('landingWidgets').textContent);
   assert.match(text, /November 2026/);
   assert.match(text, /Matei/, 'name day');
-  assert.match(text, /EUR 5\.0912 {2}USD 4\.6871/);
-  assert.match(text, /GBP 5\.7954 {2}CHF 5\.4437/);
+  assert.match(text, /EUR 5\.091 · USD 4\.687 · GBP 5\.795/, 'three currencies per line, 3 decimals, joined with a dot');
+  assert.match(text, /CHF 5\.444/);
+  assert.doesNotMatch(text, /5\.0912|4\.6871/, 'no 4-decimal text');
   assert.match(text, /16\.11/, 'BNR date');
   assert.match(text, /Arsenal/);
   assert.match(text, /Live 34' · 2 - 1/);
-  // Own events: the next ones under the grid, a dot under the marked days (the seeded yearly event is on 20 November).
-  assert.match(text, /Fri 20 Nov Dentist appointment/, 'next event line');
+  // Own events: the Events card in the stack, a dot under the marked days (the seeded yearly event is on 20 November).
+  const evCard = await page.evaluate(() => {
+    const c = document.querySelector('#landingWidgets [data-lw="events"]');
+    return { label: c.querySelector('.lw-label').textContent, lines: Array.prototype.map.call(c.querySelectorAll('.lw-line'), (l) => l.textContent) };
+  });
+  assert.equal(evCard.label, 'Events');
+  assert.deepEqual(evCard.lines, ['Fri 20 Nov Dentist appointment'], 'next event in the Events card');
+  assert.equal(await page.locator('#landingWidgets .lw-grid .lw-event, #landingWidgets .lw-grid .lw-events').count(), 0, 'no events line under the grid');
   assert.deepEqual(
     await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-mark'), (c) => c.textContent)),
     ['20'],
     'dot on the day with an event'
   );
   assert.equal(await page.locator('#landingWidgets .lw-today.lw-mark').count(), 0);
-  // Name day card: title is the card's own, no date; first line = the names only.
+  // Name day (top row): the label "Name day", the names on the first line, no date text anywhere in it.
   const nd = await page.evaluate(() => {
     const c = document.querySelector('#landingWidgets [data-lw="nameday"]');
     return {
-      label: c.querySelector('.lw-label').textContent,
-      lines: Array.prototype.map.call(c.querySelectorAll('.lw-line'), (l) => l.textContent),
-      icon: !!c.querySelector('svg.lw-icon'),
-      meta: !!c.querySelector('.lw-meta')
+      label: c.querySelector('.lw-toplabel').textContent,
+      lines: Array.prototype.map.call(c.querySelectorAll('.lw-topline'), (l) => l.textContent),
+      inStack: !!document.querySelector('#landingWidgets .lw-stack [data-lw="nameday"]')
     };
   });
   assert.equal(nd.label, 'Name day');
   assert.deepEqual(nd.lines, ['Matei'], 'names only, no holiday today');
-  assert.equal(nd.icon, true);
-  assert.equal(nd.meta, false);
-  assert.doesNotMatch(nd.label + nd.lines.join(' '), /Monday|November|16/, 'no date text on the card');
+  assert.equal(nd.inStack, false, 'not in the stack any more');
+  assert.doesNotMatch(nd.label + nd.lines.join(' '), /Monday|November|16/, 'no date text');
   // A holiday (30 November, St Andrew): the names first, the holiday name on a further line.
   await page.evaluate(() => {
     HomeCalendar.setClock(() => new Date(2026, 10, 30, 12, 0, 0));
     HomeLanding.render();
   });
   const hol = await page.evaluate(() =>
-    Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-line'), (l) => l.textContent)
+    Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)
   );
   assert.equal(hol.length, 2, 'names + holiday: ' + hol.join(' | '));
   assert.match(hol[0], /Andrei/);
   assert.match(hol[1], /Andrei/i);
+  // A day without names: "No name days today" and the next name day.
+  await page.evaluate(() => {
+    HomeCalendar.setClock(() => new Date(2026, 10, 17, 12, 0, 0));
+    HomeLanding.render();
+  });
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)),
+    ['No name days today', '25 Nov: Ecaterina, Cătălina, Cătălin'],
+    'never empty'
+  );
   await page.evaluate(() => {
     HomeCalendar.setClock(() => new Date(2026, 10, 16, 12, 0, 0));
     HomeLanding.render();
@@ -238,24 +253,24 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   // 4. A part without data is left out, no error text; Name day follows the calendar marks.
   await seed(page, { noRates: true });
   await toggles(page, ALL);
-  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'football']);
+  assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'events', 'football']);
   await seed(page, { noFootball: true });
   await toggles(page, ALL);
-  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'rates']);
+  assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'rates', 'events']);
   await seed(page);
   await toggles(page, ALL);
   await page.evaluate(() => HomeInfo.daily.set({ showNameDays: false, showHolidays: false }));
-  assert.deepEqual((await state(page)).cards, ['calendar', 'rates', 'football'], 'no marks, no name day card');
+  assert.deepEqual((await state(page)).cards, ['calendar', 'rates', 'events', 'football'], 'no marks, nothing to show: no name day');
   await page.evaluate(() => HomeInfo.daily.set({ showNameDays: true, showHolidays: true }));
   // Partial toggles.
   await toggles(page, { calendar: false, nameday: false, rates: true, football: false });
   assert.deepEqual((await state(page)).cards, ['rates']);
   await toggles(page, { calendar: true, nameday: true, rates: false, football: false });
-  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday']);
+  assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'events']);
 
   // 5. Settings change re-renders at once (no clock needed).
   await page.evaluate(() => HomeInfo.finance.set({ landing: true }));
-  assert.deepEqual((await state(page)).cards, ['calendar', 'nameday', 'rates']);
+  assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'rates', 'events']);
   await page.evaluate(() => HomeInfo.calendar.set({ landing: false }));
   assert.deepEqual((await state(page)).cards, ['nameday', 'rates']);
 
@@ -329,6 +344,8 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
     weather: await page.evaluate(rect('#homeWeather')),
     buttons: await page.evaluate(rect('#topButtons')),
     time: await page.evaluate(rect('#timeRow')),
+    date: await page.evaluate(rect('#date')),
+    nameday: await page.evaluate(rect('#landingWidgets [data-lw="nameday"]')),
     dock: await page.evaluate(rect('#dockBand')),
     heroVisible: await page.evaluate(() => {
       const h = document.getElementById('hero');
@@ -368,12 +385,21 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.ok(g.t.weather.top >= g.time.bottom && g.t.weather.top <= g.time.bottom + 30, 'under the date row: ' + g.t.weather.top);
   // No overlap among the columns, the header buttons, the clock/date row and the dock.
   const named = { ...cols, buttons: g.buttons, time: g.time, dock: g.dock };
+  delete named.time; // the clock row's box is wider than its text: the date and the name day are checked below
   const names = Object.keys(named);
   for (let i = 0; i < names.length; i++)
     for (let j = i + 1; j < names.length; j++)
       assert.equal(overlap(named[names[i]], named[names[j]]), false, 'overlap: ' + names[i] + ' / ' + names[j]);
   // The three sections are equal boxes (same width, same height) that fill the column; all three present.
-  assert.deepEqual(g.cards.map((c) => c.id), ['nameday', 'rates', 'football']);
+  // Name day (top row): right of the date block, left of the header buttons, on the clock's line, never over anything.
+  assert.ok(g.nameday, 'top-row name day present');
+  assert.ok(g.nameday.left >= g.date.right + 40, 'at least 40 px right of the date block: ' + g.nameday.left + ' / ' + g.date.right);
+  assert.ok(g.nameday.right <= g.buttons.left - 30, 'left of the header buttons');
+  assert.ok(g.nameday.top >= g.time.top - 1 && g.nameday.bottom <= g.time.bottom + 1, 'inside the clock row, on its line');
+  near((g.nameday.top + g.nameday.bottom) / 2, (g.time.top + g.time.bottom) / 2, 4, 'centred on the clock row');
+  for (const [k, r] of Object.entries({ date: g.date, buttons: g.buttons, weather: g.weather, grid: g.grid, stack: g.stack }))
+    assert.equal(overlap(g.nameday, r), false, 'name day vs ' + k);
+  assert.deepEqual(g.cards.map((c) => c.id), ['rates', 'events', 'football']);
   g.cards.forEach((c) => {
     near(c.height, g.cards[0].height, 2, 'equal section heights');
     near(c.right - c.left, g.stack.width, 1, 'section width = column width');
@@ -383,7 +409,7 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   // Exchange keeps its two lines and Football its two events (the freed height of the hidden app name).
   assert.equal(await page.locator('#landingWidgets [data-lw="rates"] .lw-line').count(), 2, 'Exchange: two lines');
   assert.equal(await page.locator('#landingWidgets [data-lw="football"] .lw-match').count(), 2, 'two football events');
-  assert.equal(await page.locator('#landingWidgets [data-lw="nameday"] .lw-line').count(), 1);
+  assert.equal(await page.locator('#landingWidgets [data-lw="events"] .lw-line').count() >= 1, true, 'Events never empty');
   // Plain text like the weather block: no box, no background, no border, no radius, no shadow, no blur; same color.
   const looks = await page.evaluate(() => {
     const cs = (e) => {
@@ -391,7 +417,7 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
       return { bg: c.backgroundColor, bgi: c.backgroundImage, border: c.borderTopWidth + ' ' + c.borderLeftWidth, radius: c.borderRadius, shadow: c.boxShadow, text: c.textShadow, color: c.color, filter: c.backdropFilter || c.webkitBackdropFilter || 'none' };
     };
     const w = cs(document.querySelector('#homeWeather .weather-city')),
-      boxes = ['.lw-grid', '.lw-stack', '[data-lw="nameday"]', '[data-lw="rates"]', '[data-lw="football"]'].map((q) => [q, cs(document.querySelector('#landingWidgets ' + q))]),
+      boxes = ['.lw-grid', '.lw-stack', '[data-lw="nameday"]', '[data-lw="rates"]', '[data-lw="events"]', '[data-lw="football"]'].map((q) => [q, cs(document.querySelector('#landingWidgets ' + q))]),
       label = cs(document.querySelector('#landingWidgets .lw-label')),
       body = cs(document.querySelector('#landingWidgets .lw-line'));
     return { w, boxes, label, body };
@@ -422,6 +448,21 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   sizes.body.forEach((f) => assert.ok(f >= sizes.weatherDetail * 0.7, 'font ' + f));
   assert.ok(sizes.grid >= 30, 'calendar cells use the freed height: ' + sizes.grid);
   sizes.titles.forEach((f) => assert.equal(f, 34));
+  // A full line of three currencies fits the card width (never cut) at the size the card chose.
+  const rateFit = () =>
+    page.evaluate(() => {
+      const ls = document.querySelectorAll('#landingWidgets [data-lw="rates"] .lw-line');
+      return {
+        n: ls.length,
+        cut: Array.prototype.some.call(ls, (l) => l.scrollWidth > l.clientWidth),
+        font: parseFloat(getComputedStyle(ls[0]).fontSize),
+        text: Array.prototype.map.call(ls, (l) => l.textContent)
+      };
+    });
+  let rf = await rateFit();
+  assert.deepEqual(rf.text, ['EUR 5.091 · USD 4.687 · GBP 5.795', 'CHF 5.444'], 'three per line, then one');
+  assert.equal(rf.cut, false, 'three currencies fit the card width at ' + rf.font + ' px');
+  assert.ok(rf.font >= 22, 'readable size: ' + rf.font);
   // Football and rate text are not clipped: nothing overflows its section.
   assert.equal(
     await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-card, #landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)),
@@ -466,16 +507,26 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
       events: document.querySelectorAll('#landingWidgets [data-lw="football"] .lw-match').length
     }));
   };
-  let r = await shrink(520);
-  assert.ok(r.cards.indexOf('football') >= 0, 'Football kept: ' + r.cards);
-  assert.ok(r.cards.indexOf('rates') < 0 || r.cards.indexOf('nameday') >= 0, 'Exchange dropped before Name day: ' + r.cards);
-  r = await shrink(400);
-  assert.deepEqual(r.cards.filter((c) => c !== 'calendar'), ['football'].filter((c) => r.cards.indexOf(c) >= 0), 'only Football left: ' + r.cards);
-  r = await shrink(330);
-  assert.ok(r.cards.indexOf('football') < 0 || r.events === 1, 'second event before the card: ' + JSON.stringify(r));
+  // Dropped from the end: Football's second event, Football, Events, then Exchange (whole parts, never clipped).
+  const order = ['rates', 'events', 'football'];
+  let r = await shrink(520),
+    prev = 99;
+  for (const dock of [520, 450, 400, 360, 330, 300, 270, 240]) {
+    r = await shrink(dock);
+    const stackIds = r.cards.filter((c) => order.indexOf(c) >= 0);
+    assert.deepEqual(stackIds, order.slice(0, stackIds.length), 'dropped from the end at dock ' + dock + ': ' + r.cards);
+    assert.ok(stackIds.length <= prev, 'monotonic');
+    prev = stackIds.length;
+    assert.equal(
+      await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-card, #landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)),
+      false,
+      'never clipped at dock ' + dock
+    );
+  }
+  r = await shrink(520);
+  assert.ok(r.cards.length >= 4, 'at 520 most of it still fits: ' + r.cards);
   r = await shrink(200);
-  assert.deepEqual(r.cards, [], 'nothing fits: nothing shown');
-  assert.equal(await page.evaluate(() => document.getElementById('landingWidgets').hidden), true);
+  assert.deepEqual(r.cards.filter((c) => c !== 'nameday'), [], 'nothing fits: only the top-row Name day (it does not depend on the room below)');
   await tvRoom();
 
   // 9d. A wide weather block (text format) pushes the cards out first, then the grid; never overlapped.
@@ -487,11 +538,13 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.equal(overlap(g.weather, g.grid), false);
   await weather(page, 1400);
   await page.evaluate(() => HomeLanding.render());
-  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), [], 'nothing left: nothing shown');
+  assert.deepEqual(await page.evaluate(() => HomeLanding.state().cards), ['nameday'], 'only the top-row Name day is left (it needs no room below the clock row)');
   await weather(page, 0);
   await tvRoom();
 
-  // 9e. Events under the grid: lines (max 2), dots, today's highlight kept, nothing overlapping; none -> no line.
+  // 9e. Events card: max 2 lines in order, dots in the grid, today's highlight kept, never clipped; none -> its own line.
+  const evLines = () =>
+    page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="events"] .lw-line'), (e) => e.textContent));
   await page.evaluate(() => {
     HomeInfo.calendar.set({
       events: [
@@ -505,86 +558,98 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
     HomeI18n.refresh();
     HomeLanding.render();
   });
-  let lines = await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-event'), (e) => e.textContent));
-  assert.deepEqual(lines, ['Today 14:30 Today timed', 'Tomorrow Tomorrow all day'], 'max two lines, in order');
+  assert.deepEqual(await evLines(), ['Today 14:30 Today timed', 'Tomorrow Tomorrow all day'], 'max two lines, in order');
   assert.deepEqual(
     await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-mark'), (c) => c.textContent)),
     ['16', '17', '18'],
     'dots only for this month'
   );
-  assert.equal(await page.locator('#landingWidgets .lw-today').textContent(), '16', 'today keeps its highlight (with a dot)');
-  assert.equal(await page.locator('#landingWidgets .lw-today.lw-mark').count(), 1);
-  g = await geo();
-  assert.ok(g.grid && g.stack);
-  const evBox = await page.evaluate(rect('#landingWidgets .lw-events'));
-  assert.ok(evBox.top >= g.grid.top && evBox.bottom <= g.grid.bottom + 1, 'events inside the grid column');
-  assert.ok(g.grid.bottom <= g.dock.top - 20);
-  assert.equal(overlap(g.grid, g.stack), false);
-  assert.equal(overlap(g.grid, g.weather), false);
-  assert.equal(overlap(g.grid, g.buttons), false);
-  assert.equal(
-    await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)),
-    false,
-    'nothing clipped'
-  );
-  // Rows keep a readable size with the events block (cells at least 1.4 line heights).
-  assert.ok(await page.evaluate(() => Array.prototype.every.call(document.querySelectorAll('#landingWidgets .lw-row:not(.lw-weekdays)'), (r) => r.getBoundingClientRect().height >= 30)));
-  // A long title ends with an ellipsis, inside the column.
+  assert.equal(await page.locator('#landingWidgets .lw-today.lw-mark').count(), 1, 'today keeps its highlight (with a dot)');
+  assert.equal(await page.locator('#landingWidgets .lw-grid .lw-event').count(), 0, 'no events line under the grid');
+  assert.equal(await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets .lw-card, #landingWidgets .lw-grid'), (e) => e.scrollHeight > e.clientHeight + 1)), false);
+  // A long title ends with an ellipsis inside the card.
   await page.evaluate(() => {
     HomeInfo.calendar.set({ events: [{ id: 'l', day: 16, month: 11, title: 'An extremely long event title that cannot possibly fit in one column line', yearly: true, time: '23:00' }] });
   });
   const longEv = await page.evaluate(() => {
-    const e = document.querySelector('#landingWidgets .lw-event');
-    return { cut: e.scrollWidth > e.clientWidth, over: getComputedStyle(e).textOverflow, w: e.getBoundingClientRect().right, grid: document.querySelector('#landingWidgets .lw-grid').getBoundingClientRect().right };
+    const e = document.querySelector('#landingWidgets [data-lw="events"] .lw-line');
+    return { cut: e.scrollWidth > e.clientWidth, over: getComputedStyle(e).textOverflow, w: e.getBoundingClientRect().right, card: document.querySelector('#landingWidgets [data-lw="events"]').getBoundingClientRect().right };
   });
   assert.equal(longEv.cut, true);
   assert.equal(longEv.over, 'ellipsis');
-  assert.ok(longEv.w <= longEv.grid + 0.5);
-  // Little room: the event lines go first (whole lines), the grid itself stays while it fits.
+  assert.ok(longEv.w <= longEv.card + 0.5);
+  // Nothing upcoming: the card stays and says so; dots still follow the stored days.
   await page.evaluate(() => {
-    HomeInfo.calendar.set({ events: [{ id: 'a', day: 16, month: 11, title: 'One', yearly: true, time: '14:30' }, { id: 'b', day: 17, month: 11, title: 'Two', yearly: true }] });
-    document.getElementById('dockBand').style.top = '640px';
-    HomeLanding.render();
+    HomeInfo.calendar.set({ events: [{ id: 'g', day: 3, month: 11, title: 'Passed', yearly: false, year: 2026 }] });
   });
-  const tight = await page.evaluate(() => ({ lines: document.querySelectorAll('#landingWidgets .lw-event').length, grid: !!document.querySelector('#landingWidgets .lw-grid'), clip: document.querySelector('#landingWidgets .lw-grid') ? document.querySelector('#landingWidgets .lw-grid').scrollHeight > document.querySelector('#landingWidgets .lw-grid').clientHeight + 1 : false }));
-  assert.equal(tight.clip, false, 'never clipped');
-  assert.ok(tight.lines <= 2);
+  assert.deepEqual(await evLines(), ['No events upcoming']);
+  assert.deepEqual(await page.evaluate(() => HomeCalendar.landingMonth().marked), [3]);
+  assert.ok((await state(page)).cards.indexOf('events') >= 0, 'never hidden for lack of data');
+  // Romanian: Azi / Mâine / weekday day month in Romanian; the card title; the empty text.
   await page.evaluate(() => {
-    document.getElementById('dockBand').style.top = '250px'; // grid cannot fit even without lines
-    HomeLanding.render();
-  });
-  assert.equal(await page.evaluate(() => document.querySelectorAll('#landingWidgets .lw-event').length), 0, 'no event line without a grid');
-  await tvRoom();
-  // No event in range: no line, no dot.
-  await page.evaluate(() => {
-    HomeInfo.calendar.set({ events: [{ id: 'f', day: 28, month: 11, title: 'Far', yearly: true }, { id: 'g', day: 3, month: 11, title: 'Passed', yearly: true }] });
-    HomeLanding.render();
-  });
-  assert.equal(await page.locator('#landingWidgets .lw-event').count(), 0);
-  assert.equal(await page.locator('#landingWidgets .lw-events').count(), 0);
-  assert.deepEqual(await page.evaluate(() => HomeCalendar.landingMonth().marked), [3, 28]);
-  // Romanian: Azi / Mâine / weekday day month in Romanian.
-  await page.evaluate(() => {
-    HomeInfo.calendar.set({ events: [{ id: 'a', day: 16, month: 11, title: 'Azi test', yearly: true, time: '23:30' }, { id: 'b', day: 17, month: 11, title: 'Mâine test', yearly: true }, ] });
+    HomeInfo.calendar.set({ events: [{ id: 'a', day: 16, month: 11, title: 'Azi test', yearly: true, time: '23:30' }, { id: 'b', day: 21, month: 11, title: 'Meci', yearly: true, time: '18:00' }] });
     localStorage.setItem('tvhome.language', 'ro');
     HomeI18n.refresh();
     HomeLanding.render();
   });
-  assert.deepEqual(
-    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets .lw-event'), (e) => e.textContent)),
-    ['Azi 23:30 Azi test', 'Mâine Mâine test']
-  );
+  assert.deepEqual(await evLines(), ['Azi 23:30 Azi test', 'sâm 21 nov 18:00 Meci']);
+  assert.equal(await page.locator('#landingWidgets [data-lw="events"] .lw-label').textContent(), 'Evenimente');
+  assert.equal(await page.locator('#landingWidgets [data-lw="nameday"] .lw-toplabel').textContent(), 'Onomastica');
+  await page.evaluate(() => HomeInfo.calendar.set({ events: [] }));
+  assert.deepEqual(await evLines(), ['Niciun eveniment programat']);
+  // A day without names, in Romanian.
   await page.evaluate(() => {
-    HomeInfo.calendar.set({ events: [{ id: 'a', day: 21, month: 11, title: 'Meci', yearly: true, time: '18:00' }] });
+    HomeCalendar.setClock(() => new Date(2026, 10, 17, 12, 0, 0));
+    HomeLanding.render();
   });
-  assert.match(await page.locator('#landingWidgets .lw-event').first().textContent(), /^Sâm 21 nov 18:00 Meci$/);
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.textContent)),
+    ['Fără onomastici azi', '25 nov: Ecaterina, Cătălina, Cătălin']
+  );
+  g = await geo();
+  for (const [k, r] of Object.entries({ date: g.date, buttons: g.buttons, weather: g.weather, grid: g.grid, stack: g.stack }))
+    assert.equal(overlap(g.nameday, r), false, 'ro: name day vs ' + k);
+  assert.ok(g.nameday.right <= g.buttons.left - 30);
+  // Long name day text (7 January: many names and a long holiday): ellipsis, never over the date block or the buttons.
   await page.evaluate(() => {
+    HomeCalendar.setClock(() => new Date(2026, 0, 7, 12, 0, 0));
+    HomeLanding.render();
+  });
+  // A wide date block (long weekday and month names) leaves less room: lines are cut, nothing moves over anything.
+  await page.evaluate(() => {
+    const d = document.getElementById('date');
+    window.__dateText = d.textContent;
+    d.textContent = 'WEDNESDAY' + '\n' + 'SEPTEMBER 30 2026 AND MORE';
+    HomeLanding.render();
+  });
+  g = await geo();
+  const topCut = await page.evaluate(() => Array.prototype.some.call(document.querySelectorAll('#landingWidgets [data-lw="nameday"] .lw-topline'), (l) => l.scrollWidth > l.clientWidth));
+  assert.equal(topCut, true, 'long lines are cut with an ellipsis');
+  assert.ok(g.nameday.left >= g.date.right + 40 && g.nameday.right <= g.buttons.left - 30);
+  assert.ok(g.nameday.top >= g.time.top - 1 && g.nameday.bottom <= g.time.bottom + 1, 'inside the clock row');
+  await page.evaluate(() => {
+    document.getElementById('date').textContent = window.__dateText;
     localStorage.removeItem('tvhome.language');
     localStorage.removeItem('tvhome.clockFormat');
     HomeI18n.refresh();
+    HomeCalendar.setClock(() => new Date(2026, 10, 16, 12, 0, 0));
     HomeInfo.calendar.set({ events: [{ id: 'e1', day: 20, month: 11, title: 'Dentist appointment', yearly: true }] });
     HomeLanding.render();
   });
+  // Every combination of the four toggles: the right parts, no overlap among what is shown.
+  for (let mask = 0; mask < 16; mask++) {
+    const on = { calendar: !!(mask & 1), nameday: !!(mask & 2), rates: !!(mask & 4), football: !!(mask & 8) };
+    await toggles(page, on);
+    const expected = [on.nameday && 'nameday', on.calendar && 'calendar', on.rates && 'rates', on.calendar && 'events', on.football && 'football'].filter(Boolean);
+    assert.deepEqual((await state(page)).cards, expected, 'toggles ' + JSON.stringify(on));
+    g = await geo();
+    const present = { weather: g.weather, buttons: g.buttons, date: g.date, nameday: g.nameday, grid: g.grid, stack: g.stack };
+    const keys = Object.keys(present).filter((k) => present[k]);
+    for (let i = 0; i < keys.length; i++)
+      for (let j = i + 1; j < keys.length; j++)
+        assert.equal(overlap(present[keys[i]], present[keys[j]]), false, 'toggles ' + JSON.stringify(on) + ': ' + keys[i] + ' / ' + keys[j]);
+  }
+  await toggles(page, ALL);
 
   // 10. Long team names: the card keeps its width, names are cut with an ellipsis.
   await seed(page, { long: true });
@@ -612,8 +677,11 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   }));
   assert.match(ro.month, /^noiembrie 2026$/i);
   assert.equal(ro.days[0], 'Lun');
-  assert.ok(ro.labels.includes('Onomastica'), ro.labels.join());
+  assert.ok(ro.labels.includes('Evenimente'), ro.labels.join());
+  assert.equal(await page.locator('#landingWidgets .lw-toplabel').textContent(), 'Onomastica');
   g = await geo();
+  rf = await rateFit();
+  assert.equal(rf.cut, false, 'ro: three currencies fit the card width at ' + rf.font + ' px');
   assert.equal(overlap(g.grid, g.stack), false);
   assert.equal(overlap(g.weather, g.grid), false);
   await page.evaluate(() => {
