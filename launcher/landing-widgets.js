@@ -4,7 +4,8 @@
  * a month calendar grid of the current month (middle, no markings: today only) and a stack of small glass cards
  * (right, right edge 1808): Exchange rates, Events, Football; the Name day is in the top row, right of the date block. Each shows only when its "Show on main page" toggle
  * (Settings) is ON and it has data; the grid belongs to the Calendar tab toggle, Name day to the second toggle of the
- * Rates & holidays tab, Exchange to its first one, Football to the Football tab. Nothing without data is shown (no error
+ * Rates & holidays tab, Exchange to its first one, Football to the Football tab; the Events card has its own Calendar tab
+ * toggle (landingEvents), independent of the grid's. Nothing without data is shown (no error
  * text). Data is read from storage (HomeCalendar.landingMonth / landingNameDay, HomeInfoFinance.landingCard,
  * HomeFootball.landingItems). Nothing is focusable: remote focus, Back and OK on the main page are unchanged.
  *
@@ -73,12 +74,13 @@
       return fallback;
     }
   }
-  function flag(store) {
-    return !!(store && safe(store.get, {}).landing === true);
+  function flag(store, key) {
+    return !!(store && safe(store.get, {})[key || 'landing'] === true);
   }
   function wanted() {
     return {
       calendar: flag(info.calendar),
+      events: flag(info.calendar, 'landingEvents'),
       nameday: flag(info.daily),
       rates: flag(info.finance),
       football: flag(info.football)
@@ -86,7 +88,7 @@
   }
   function active() {
     var w = wanted();
-    return info.isMrRedify() && (w.calendar || w.nameday || w.rates || w.football);
+    return info.isMrRedify() && (w.calendar || w.events || w.nameday || w.rates || w.football);
   }
 
   // ---- parts ----
@@ -209,7 +211,7 @@
       data = safe(root.HomeInfoFinance.landingCard, null);
       if (data) out.cards.push(textCard('rates', data, level));
     }
-    if (w.calendar && cal && cal.landingEventsCard) {
+    if (w.events && cal && cal.landingEventsCard) {
       data = safe(cal.landingEventsCard, null);
       if (data) out.cards.push(textCard('events', data, level, 'calendar'));
     }

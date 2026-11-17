@@ -148,3 +148,8 @@
   font-size: 22px;
   opacity: 0.8;
 }
+/* The two main-page toggles: one label width, the buttons line up. */
+.cal-tab .cal-main-page .cal-field-label {
+  min-width: 420px;
+  margin-right: 12px;
+}

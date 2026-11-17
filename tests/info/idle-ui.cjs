@@ -567,7 +567,7 @@ const assert = require('node:assert/strict'),
         w.style.top = '240px';
         w.style.width = '600px';
         w.style.height = '200px';
-        HomeInfo.calendar.set({ landing: true });
+        HomeInfo.calendar.set({ landing: true, landingEvents: true });
         window.__focusBefore = document.activeElement && (document.activeElement.id || document.activeElement.tagName);
       });
       const before = await partStates();

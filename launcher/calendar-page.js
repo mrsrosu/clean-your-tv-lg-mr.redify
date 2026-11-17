@@ -203,7 +203,7 @@
     );
     calendar = info.createStore(
       'tvhome.calendar.v1',
-      { weekStart: 'mon', weekNumbers: false, events: [], landing: false },
+      { weekStart: 'mon', weekNumbers: false, events: [], landing: false, landingEvents: false },
       function (raw) {
         var out = {};
         if (raw.weekStart === 'mon' || raw.weekStart === 'sun')
@@ -211,12 +211,26 @@
         if (typeof raw.weekNumbers === 'boolean')
           out.weekNumbers = raw.weekNumbers;
         if ('landing' in raw) out.landing = raw.landing === true;
+        if ('landingEvents' in raw) out.landingEvents = raw.landingEvents === true;
         if ('events' in raw) out.events = sanitizeEvents(raw.events);
         return out;
       }
     );
     info.daily = daily;
     info.calendar = calendar;
+    // One-time migration: before the Events card had its own toggle, "Show on main page" (landing) showed both the grid and
+    // the Events card. A stored object with landing ON and no landingEvents key keeps the card (stored once); an explicit
+    // boolean always wins.
+    try {
+      var stored = JSON.parse(root.localStorage.getItem('tvhome.calendar.v1'));
+      if (
+        stored &&
+        typeof stored === 'object' &&
+        stored.landing === true &&
+        !('landingEvents' in stored)
+      )
+        calendar.set({ landingEvents: true });
+    } catch (_) {}
   }
 
   function safe(fn, fallback) {
@@ -502,6 +516,8 @@
       toggle(sun, s.weekStart === 'sun');
       landing.textContent = s.landing ? t('On') : t('Off');
       toggle(landing, s.landing);
+      landingEvents.textContent = s.landingEvents ? t('On') : t('Off');
+      toggle(landingEvents, s.landingEvents);
       weeknum.textContent = s.weekNumbers ? t('On') : t('Off');
       toggle(weeknum, s.weekNumbers);
     }
@@ -558,14 +574,27 @@
         (targets[0] || add).focus();
       }
     }
-    // First control: show today's card on the main page.
-    var s0 = section(t('Show on main page')),
-      landing = button('cal-landing');
+    // First controls: the month grid and the Events card on the main page, each on its own.
+    var s0 = section(t('Main page')),
+      landing = button('cal-landing'),
+      landingEvents = button('cal-landing-events'),
+      rowGrid = el('div', 'cal-field'),
+      rowEvents = el('div', 'cal-field');
+    s0.className += ' cal-main-page';
     landing.onclick = function () {
       calendar.set({ landing: !calendar.get().landing });
       refreshSettings();
     };
-    s0.appendChild(landing);
+    landingEvents.onclick = function () {
+      calendar.set({ landingEvents: !calendar.get().landingEvents });
+      refreshSettings();
+    };
+    rowGrid.appendChild(el('span', 'cal-field-label', t('Show calendar on main page')));
+    rowGrid.appendChild(landing);
+    rowEvents.appendChild(el('span', 'cal-field-label', t('Show events on main page')));
+    rowEvents.appendChild(landingEvents);
+    s0.appendChild(rowGrid);
+    s0.appendChild(rowEvents);
     // Week start and numbers.
     var s1 = section(t('First day of week'));
     mon.onclick = function () {

@@ -92,7 +92,8 @@ test('calendar store defaults', () => {
     weekStart: 'mon',
     weekNumbers: false,
     events: [],
-    landing: false
+    landing: false,
+    landingEvents: false
   });
   assert.deepEqual(
     c.set({ weekStart: 'sun', weekNumbers: true }).weekStart,
@@ -151,14 +152,16 @@ test('sanitize: events not an array -> [] (also from corrupt storage)', () => {
     weekStart: 'sun',
     weekNumbers: false,
     events: [],
-    landing: false
+    landing: false,
+    landingEvents: false
   });
   const junk = memory({ 'tvhome.calendar.v1': '{broken' });
   assert.deepEqual(context(junk).HomeInfo.calendar.get(), {
     weekStart: 'mon',
     weekNumbers: false,
     events: [],
-    landing: false
+    landing: false,
+    landingEvents: false
   });
 });
 const cev = (id, day, month, title, extra) => Object.assign({ id, day, month, title, yearly: true }, extra);
@@ -295,6 +298,43 @@ test('landingNameDay: the Rates & holidays switches still apply', () => {
   assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false }), null, 'nothing to show: no element');
   assert.equal(nameDay(new Date(2026, 10, 17, 12), { showNameDays: false, showHolidays: false }), null);
   assert.deepEqual(nameDay(new Date(2026, 11, 25, 12), { showNameDays: false }).lines.length, 1, 'holiday only');
+});
+test('calendar store: landingEvents (Events card toggle) is boolean-only, default false; the grid toggle is independent', () => {
+  const mem = memory(),
+    c = context(mem).HomeInfo.calendar;
+  assert.equal(c.get().landingEvents, false);
+  assert.equal(c.set({ landingEvents: true }).landingEvents, true);
+  assert.equal(c.get().landing, false, 'the grid toggle is not touched');
+  assert.equal(c.set({ landing: true }).landingEvents, true, 'and the other way round');
+  assert.equal(c.set({ landingEvents: 'yes' }).landingEvents, false);
+  assert.equal(c.set({ landingEvents: 1 }).landingEvents, false);
+  assert.equal(c.set({ landing: false, landingEvents: true }).landing, false);
+  mem.data['tvhome.calendar.v1'] = '{"landingEvents":"x","landing":true}';
+  assert.equal(c.get().landingEvents, false, 'a corrupt stored value reads false');
+});
+test('migration: an old store with landing ON and no landingEvents keeps the Events card once; an explicit boolean wins', () => {
+  const read = (seed) => {
+    const mem = memory(seed ? { 'tvhome.calendar.v1': seed } : {}),
+      c = context(mem).HomeInfo.calendar;
+    return { s: c.get(), raw: mem.data['tvhome.calendar.v1'] };
+  };
+  const mig = read('{"weekStart":"sun","landing":true,"events":[]}');
+  assert.equal(mig.s.landingEvents, true, 'nothing disappears after the update');
+  assert.equal(mig.s.landing, true);
+  assert.equal(JSON.parse(mig.raw).landingEvents, true, 'stored once');
+  assert.equal(read('{"landing":true,"landingEvents":false}').s.landingEvents, false, 'explicit false wins');
+  assert.equal(read('{"landing":true,"landingEvents":true}').s.landingEvents, true);
+  assert.equal(read('{"landing":false}').s.landingEvents, false, 'grid off: nothing to keep');
+  assert.equal(read('{"landing":"true"}').s.landingEvents, false, 'a non-boolean landing is not ON');
+  assert.equal(read(null).s.landingEvents, false, 'fresh install');
+  assert.equal(read('{broken').s.landingEvents, false, 'corrupt JSON is safe');
+  assert.equal(read('null').s.landingEvents, false);
+  // The user turns it off later: it stays off (the key now exists).
+  const mem = memory({ 'tvhome.calendar.v1': '{"landing":true}' }),
+    c = context(mem).HomeInfo.calendar;
+  assert.equal(c.get().landingEvents, true);
+  c.set({ landingEvents: false });
+  assert.equal(context(mem).HomeInfo.calendar.get().landingEvents, false, 'not migrated again');
 });
 test('isoWeek', () => {
   const C = context(memory()).HomeCalendar;

@@ -83,15 +83,16 @@ const room = (page, on) =>
   }, on);
 const toggles = (page, on) =>
   page.evaluate((v) => {
-    HomeInfo.calendar.set({ landing: v.calendar });
+    HomeInfo.calendar.set({ landing: !!v.calendar, landingEvents: !!v.events });
     HomeInfo.daily.set({ landing: v.nameday });
     HomeInfo.finance.set({ landing: v.rates });
     HomeInfo.football.set({ landing: v.football });
   }, on);
 const state = (page) => page.evaluate(() => HomeLanding.state());
 const visible = (page) => page.evaluate(() => HomeLanding.visible());
-const ALL = { calendar: true, nameday: true, rates: true, football: true };
-const NONE = { calendar: false, nameday: false, rates: false, football: false };
+// calendar = the month grid, events = the Events card (two toggles of the Calendar tab).
+const ALL = { calendar: true, events: true, nameday: true, rates: true, football: true };
+const NONE = { calendar: false, events: false, nameday: false, rates: false, football: false };
 const ORDER = ['nameday', 'calendar', 'rates', 'events', 'football'];
 // Real weather block (forecast format, 3 days) from a seeded cache: the same data the TV showed. A width overrides it to
 // simulate a wider block (compact format / large scale); no width renders the real one again.
@@ -278,13 +279,15 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   // Partial toggles.
   await toggles(page, { calendar: false, nameday: false, rates: true, football: false });
   assert.deepEqual((await state(page)).cards, ['rates']);
-  await toggles(page, { calendar: true, nameday: true, rates: false, football: false });
+  await toggles(page, { calendar: true, events: true, nameday: true, rates: false, football: false });
   assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'events']);
 
   // 5. Settings change re-renders at once (no clock needed).
   await page.evaluate(() => HomeInfo.finance.set({ landing: true }));
   assert.deepEqual((await state(page)).cards, ['nameday', 'calendar', 'rates', 'events']);
   await page.evaluate(() => HomeInfo.calendar.set({ landing: false }));
+  assert.deepEqual((await state(page)).cards, ['nameday', 'rates', 'events'], 'the grid toggle does not hide the Events card');
+  await page.evaluate(() => HomeInfo.calendar.set({ landingEvents: false }));
   assert.deepEqual((await state(page)).cards, ['nameday', 'rates']);
 
   // 6. Not focusable, no pointer events.
@@ -649,12 +652,14 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
     HomeInfo.calendar.set({ events: [{ id: 'e1', day: 20, month: 11, title: 'Dentist appointment', yearly: true }] });
     HomeLanding.render();
   });
-  // Every combination of the four toggles: the right parts, no overlap among what is shown.
-  for (let mask = 0; mask < 16; mask++) {
-    const on = { calendar: !!(mask & 1), nameday: !!(mask & 2), rates: !!(mask & 4), football: !!(mask & 8) };
+  // Every combination of the five toggles (grid, events, name day, rates, football): the right parts, no overlap.
+  for (let mask = 0; mask < 32; mask++) {
+    const on = { calendar: !!(mask & 1), events: !!(mask & 2), nameday: !!(mask & 4), rates: !!(mask & 8), football: !!(mask & 16) };
     await toggles(page, on);
-    const expected = [on.nameday && 'nameday', on.calendar && 'calendar', on.rates && 'rates', on.calendar && 'events', on.football && 'football'].filter(Boolean);
+    const expected = [on.nameday && 'nameday', on.calendar && 'calendar', on.rates && 'rates', on.events && 'events', on.football && 'football'].filter(Boolean);
     assert.deepEqual((await state(page)).cards, expected, 'toggles ' + JSON.stringify(on));
+    assert.equal(await page.locator('#landingWidgets .lw-grid').count(), on.calendar ? 1 : 0, 'grid only with its toggle');
+    assert.equal(await page.locator('#landingWidgets [data-lw="events"]').count(), on.events ? 1 : 0, 'Events card only with its toggle');
     g = await geo();
     const present = { weather: g.weather, buttons: g.buttons, date: g.date, nameday: g.nameday, grid: g.grid, stack: g.stack };
     const keys = Object.keys(present).filter((k) => present[k]);
@@ -662,6 +667,77 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
       for (let j = i + 1; j < keys.length; j++)
         assert.equal(overlap(present[keys[i]], present[keys[j]]), false, 'toggles ' + JSON.stringify(on) + ': ' + keys[i] + ' / ' + keys[j]);
   }
+  // Grid alone, Events alone, both, neither (en and ro): position, size, no hole, no overlap, at 1920x1080.
+  const lone = async (label) => {
+    const out = {};
+    for (const [name, on] of [
+      ['neither', { calendar: false, events: false }],
+      ['grid', { calendar: true, events: false }],
+      ['events', { calendar: false, events: true }],
+      ['both', { calendar: true, events: true }]
+    ]) {
+      await toggles(page, { ...NONE, ...on });
+      const gg = await geo();
+      out[name] = gg;
+      const stackIds = gg.cards.map((c) => c.id);
+      assert.equal(!!gg.grid, on.calendar, label + ' ' + name + ': grid presence');
+      assert.deepEqual(stackIds, on.events ? ['events'] : [], label + ' ' + name + ': the stack holds only the Events card when it is the only one');
+      assert.equal(!!gg.stack, on.events, label + ' ' + name + ': stack presence (no empty box)');
+      const parts = { weather: gg.weather, buttons: gg.buttons, date: gg.date, grid: gg.grid, stack: gg.stack };
+      const ks = Object.keys(parts).filter((k) => parts[k]);
+      for (let i = 0; i < ks.length; i++)
+        for (let j = i + 1; j < ks.length; j++) assert.equal(overlap(parts[ks[i]], parts[ks[j]]), false, label + ' ' + name + ': ' + ks[i] + ' / ' + ks[j]);
+      if (gg.stack) {
+        near(gg.stack.right, 1808, 1, label + ' ' + name + ': right edge');
+        near(gg.stack.width, 549, 2, label + ' ' + name + ': column width');
+        assert.ok(gg.stack.bottom <= gg.dock.top - 20, label + ' ' + name + ': above the dock');
+      }
+      if (gg.grid) {
+        near(gg.grid.width, 549, 2, label + ' ' + name + ': grid width');
+        assert.ok(gg.grid.bottom <= gg.dock.top - 20);
+      }
+      assert.equal(await visible(page), on.calendar || on.events, label + ' ' + name + ': visible only when something is on');
+    }
+    // The Events card alone sits where it sits together with the grid (same left, top, width, height).
+    near(out.events.stack.left, out.both.stack.left, 1, label + ': events alone = events with the grid (left)');
+    near(out.events.stack.top, out.both.stack.top, 2, label + ': top');
+    near(out.events.stack.width, out.both.stack.width, 1, label + ': width');
+    near(out.events.cards[0].height, out.both.cards[0].height, 2, label + ': a lone card fills the same column');
+    // The grid alone is where it is with the card: the middle column, no hole to the right needed.
+    near(out.grid.grid.left, out.both.grid.left, 1, label + ': grid alone = grid with events (left)');
+    near(out.grid.grid.top, out.both.grid.top, 2, label + ': top');
+    near(out.grid.grid.height, out.both.grid.height, 2, label + ': height');
+  };
+  await lone('en');
+  // The Events card alone shows its text (an event, or the empty line), also in Romanian.
+  await toggles(page, { ...NONE, events: true });
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="events"] .lw-line'), (e) => e.textContent)),
+    ['Fri 20 Nov Dentist appointment']
+  );
+  await page.evaluate(() => {
+    localStorage.setItem('tvhome.language', 'ro');
+    HomeI18n.refresh();
+    HomeLanding.render();
+  });
+  await lone('ro');
+  await toggles(page, { ...NONE, events: true });
+  assert.equal(await page.locator('#landingWidgets [data-lw="events"] .lw-label').textContent(), 'Evenimente');
+  await page.evaluate(() => {
+    HomeInfo.calendar.set({ events: [] });
+    HomeLanding.render();
+  });
+  assert.deepEqual(
+    await page.evaluate(() => Array.prototype.map.call(document.querySelectorAll('#landingWidgets [data-lw="events"] .lw-line'), (e) => e.textContent)),
+    ['Niciun eveniment programat'],
+    'alone and empty: its own line, nothing else shown'
+  );
+  await page.evaluate(() => {
+    localStorage.removeItem('tvhome.language');
+    HomeI18n.refresh();
+    HomeInfo.calendar.set({ events: [{ id: 'e1', day: 20, month: 11, title: 'Dentist appointment', yearly: true }] });
+    HomeLanding.render();
+  });
   await toggles(page, ALL);
 
   // 10. Long team names: the card keeps its width, names are cut with an ellipsis.
