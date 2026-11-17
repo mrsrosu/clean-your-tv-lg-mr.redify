@@ -15,7 +15,7 @@
  * open; render() also leaves it hidden under Settings and the app picker.
  *
  * Nothing runs with the scope off or with every toggle OFF: no timer, no request. While on: one timer per minute
- * (date change, layout) and the data refreshes the pages use (rates, football) at most once an hour while Home is in
+ * (date change, layout), the rates schedule check (a request only at the BNR slots) and the football refresh at most once an hour while Home is in
  * front. Store changes made in Settings re-render at once (HomeInfo.onChange).
  */
 (function (root) {
@@ -459,10 +459,14 @@
       now = clock(),
       mine = generation;
     if (doc.hidden) return;
-    function run(key, on, mod) {
-      if (!on || !mod || !mod.refresh || now - refreshedAt[key] < HOUR) return;
+    // method: rates use the schedule (refreshIfDue, which costs nothing unless a BNR slot is due, so it is asked on every
+    // check); football keeps its own hourly pace.
+    function run(key, on, mod, method, every) {
+      if (!on || !mod || !mod[method]) return;
+      // A clock that went back (wrong TV time corrected) never blocks the next refresh.
+      if (every && now >= refreshedAt[key] && now - refreshedAt[key] < every) return;
       refreshedAt[key] = now;
-      var p = safe(mod.refresh, null);
+      var p = safe(mod[method], null);
       if (p && p.then)
         p.then(
           function () {
@@ -471,8 +475,8 @@
           function () {}
         );
     }
-    run('rates', w.rates, root.HomeInfoFinance);
-    run('football', w.football, root.HomeFootball);
+    run('rates', w.rates, root.HomeInfoFinance, 'refreshIfDue', 0);
+    run('football', w.football, root.HomeFootball, 'refresh', HOUR);
   }
   function tick() {
     timer = null;
@@ -524,7 +528,7 @@
     reconcile: reconcile,
     render: render,
     suppressed: suppressed,
-    // Test seam: the device clock (ms) used for the hourly refresh and the minute timer.
+    // Test seam: the device clock (ms) used for the football pace and the minute timer.
     setClock: function (fn) {
       clock = fn;
     },

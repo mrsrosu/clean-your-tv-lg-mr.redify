@@ -320,13 +320,14 @@
       jobs = [];
     lastRefresh = now();
     if (s.style !== 'panel' || !info.isMrRedify()) return;
-    function call(mod) {
+    // Rates go through their schedule (a request only at the BNR slots), the others refresh as before.
+    function call(mod, method) {
       try {
-        var p = mod && mod.refresh && mod.refresh();
+        var p = mod && mod[method || 'refresh'] && mod[method || 'refresh']();
         if (p && p.then) jobs.push(p.then(null, function () {}));
       } catch (_) {}
     }
-    if (s.blocks.rates) call(root.HomeInfoFinance);
+    if (s.blocks.rates) call(root.HomeInfoFinance, 'refreshIfDue');
     if (s.blocks.football) call(root.HomeFootball);
     if (jobs.length && root.Promise)
       root.Promise.all(jobs).then(function () {

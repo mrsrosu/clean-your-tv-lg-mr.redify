@@ -19,7 +19,8 @@ function memory(seed) {
   };
 }
 function context(storage, extra) {
-  const surface = { classList: { contains: () => false } },
+  const on = !!(extra && extra.mrRedify),
+    surface = { classList: { contains: (c) => on && c === 'ctv-mr-redify' } },
     document = {
       getElementById: () => surface,
       addEventListener() {},
@@ -35,7 +36,7 @@ function context(storage, extra) {
       extra || {}
     );
   ctx.window = ctx;
-  for (const f of ['info-store', 'info-fetch', 'finance'])
+  for (const f of ['info-store', 'info-fetch', 'ro-calendar-data', 'finance'])
     vm.runInNewContext(fs.readFileSync('launcher/' + f + '.js', 'utf8'), ctx);
   return ctx;
 }
@@ -195,8 +196,10 @@ test('transport: good reply is cached and parsed', async () => {
   assert.deepEqual(Object.keys(JSON.parse(ctx.calls[0].payload)), ['id']);
   assert.equal(ctx.HomeInfo.finance.get().current.date, fixtureDate);
   assert.ok(mem.data['tvhome.cache.v1.bnr']);
-  await ctx.HomeInfoFinance.refresh(); // fresh cache: no second call
-  assert.equal(ctx.calls.length, 1);
+  // The schedule decides: the stored rates are current for the instant the page was opened, so no second call.
+  ctx.HomeInfoFinance.setClock(() => Date.parse(fixtureDate + 'T16:00:00Z')); // after both slots of the fixture day
+  await ctx.HomeInfoFinance.refreshIfDue();
+  assert.equal(ctx.calls.length, 1, 'refreshIfDue asks nothing when the rate date is current');
 });
 test('transport: unknown method / service errors => update-required, never throws', async () => {
   for (const reply of [
@@ -277,6 +280,201 @@ test('transport: reply without XML or with corrupt XML never rotates', async () 
   const r = await ctx.HomeInfoFinance.refresh();
   assert.notEqual(r.state, 'ok');
   assert.equal(ctx.HomeInfo.finance.get().current, null);
+});
+// ---- BNR schedule (injected clock): requests only at 13:05 / 14:05 Romanian time of banking days ----
+const UTC = (iso, hm) => Date.parse(iso + 'T' + hm + ':00Z');
+const xmlOn = (date) => xml.replace(/2026-11-16/g, date);
+const GOOD = (date) => JSON.stringify({ returnValue: true, xml: xmlOn(date) });
+const NET = JSON.stringify({ returnValue: false, errorCode: 'bnr-network-error' });
+// A scheduled context: mr.redify on, a bridge whose replies come from a mutable queue.
+function sched(mem, replies) {
+  const calls = [];
+  function Bridge() {}
+  Bridge.prototype.call = function () {
+    calls.push(1);
+    const self = this,
+      reply = typeof replies.next === 'function' ? replies.next() : replies.reply;
+    Promise.resolve().then(() => self.onservicecallback(reply));
+  };
+  Bridge.prototype.cancel = function () {};
+  const ctx = context(mem, { PalmServiceBridge: Bridge, setTimeout, clearTimeout, mrRedify: true });
+  ctx.calls = calls;
+  let now = 0;
+  ctx.at = (ms) => {
+    now = ms;
+    ctx.HomeInfoFinance.setClock(() => now);
+  };
+  return ctx;
+}
+const stored = (ctx, date) => ctx.HomeInfoFinance.ingest(day(date, 5.1));
+async function asks(ctx, ms) {
+  ctx.at(ms);
+  const before = ctx.calls.length;
+  await ctx.HomeInfoFinance.refreshIfDue();
+  return ctx.calls.length - before;
+}
+test('schedule: Romanian time from UTC, EET/EEST switch on the last Sunday of March/October at 01:00 UTC', () => {
+  const F = context(memory()).HomeInfoFinance;
+  assert.equal(F.isSummerTime(UTC('2026-03-29', '00:59')), false);
+  assert.equal(F.isSummerTime(UTC('2026-03-29', '01:00')), true);
+  assert.equal(F.isSummerTime(UTC('2026-10-25', '00:59')), true);
+  assert.equal(F.isSummerTime(UTC('2026-10-25', '01:00')), false);
+  assert.deepEqual(F.roLocal(UTC('2026-11-16', '11:05')), { y: 2026, m: 11, d: 16, h: 13, min: 5 });
+  assert.deepEqual(F.roLocal(UTC('2026-06-15', '10:05')), { y: 2026, m: 6, d: 15, h: 13, min: 5 });
+  assert.deepEqual(F.roLocal(UTC('2026-06-15', '21:30')), { y: 2026, m: 6, d: 16, h: 0, min: 30 }, 'past midnight local');
+  const w = F.neededRate(UTC('2026-11-16', '11:05')),
+    su = F.neededRate(UTC('2026-06-15', '10:05'));
+  assert.equal(w.date, '2026-11-16');
+  assert.equal(w.slot1, UTC('2026-11-16', '11:05'));
+  assert.equal(w.slot2, UTC('2026-11-16', '12:05'));
+  assert.equal(su.slot1, UTC('2026-06-15', '10:05'));
+  assert.equal(su.slot2, UTC('2026-06-15', '11:05'));
+  assert.equal(F.neededRate(UTC('2026-11-16', '11:04')).date, '2026-11-13', 'before 13:05: still last Friday');
+});
+test('schedule: nothing before 13:05; 13:05 asks once; a fresh date ends the day; no second request', async () => {
+  const ctx = sched(memory(), { reply: GOOD('2026-11-16') });
+  stored(ctx, '2026-11-13');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '00:00')), 0);
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:04')), 0, '13:04');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:05')), 1, '13:05');
+  assert.equal(ctx.HomeInfo.finance.get().current.date, '2026-11-16');
+  for (const t of ['11:06', '11:30', '12:04', '12:05', '12:06', '16:00', '23:59'])
+    assert.equal(await asks(ctx, UTC('2026-11-16', t)), 0, 'no more today: ' + t);
+  assert.equal(ctx.HomeInfo.finance.get().previous.date, '2026-11-13');
+});
+test('schedule: BNR late: the old date at 13:05 -> the second request at 14:05 only, then nothing', async () => {
+  const replies = { reply: GOOD('2026-11-13') },
+    ctx = sched(memory(), replies);
+  stored(ctx, '2026-11-13');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:05')), 1, 'slot 1');
+  for (const t of ['11:06', '11:40', '12:04'])
+    assert.equal(await asks(ctx, UTC('2026-11-16', t)), 0, 'answered (old date): wait for slot 2: ' + t);
+  replies.reply = GOOD('2026-11-16');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '12:05')), 1, 'slot 2');
+  assert.equal(ctx.HomeInfo.finance.get().current.date, '2026-11-16');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '13:00')), 0);
+  // Both slots late: after 14:05 no more until the next banking day.
+  const ctx2 = sched(memory(), { reply: GOOD('2026-11-13') });
+  stored(ctx2, '2026-11-13');
+  assert.equal(await asks(ctx2, UTC('2026-11-16', '11:05')), 1);
+  assert.equal(await asks(ctx2, UTC('2026-11-16', '12:05')), 1);
+  for (const t of ['12:06', '14:00', '23:00'])
+    assert.equal(await asks(ctx2, UTC('2026-11-16', t)), 0, 'after slot 2: ' + t);
+  assert.equal(await asks(ctx2, UTC('2026-11-17', '11:04')), 0);
+  assert.equal(await asks(ctx2, UTC('2026-11-17', '11:05')), 1, 'next banking day');
+});
+test('schedule: weekends, legal holidays and Good Friday ask nothing; the next banking day does', async () => {
+  const ctx = sched(memory(), { reply: GOOD('2026-11-13') });
+  stored(ctx, '2026-11-13');
+  for (const t of ['2026-11-14T11:05', '2026-11-14T20:00', '2026-11-15T11:05', '2026-11-15T23:00']) {
+    const [d, h] = t.split('T');
+    assert.equal(await asks(ctx, UTC(d, h)), 0, 'weekend ' + t);
+  }
+  // 30 Nov (St Andrew) and 1 Dec (National Day) are legal holidays: last banking day Friday 27 Nov.
+  const h = sched(memory(), { reply: GOOD('2026-12-02') });
+  stored(h, '2026-11-27');
+  for (const t of [['2026-11-30', '11:05'], ['2026-11-30', '12:05'], ['2026-12-01', '11:05'], ['2026-12-01', '16:00']])
+    assert.equal(await asks(h, UTC(t[0], t[1])), 0, 'holiday ' + t.join(' '));
+  assert.equal(await asks(h, UTC('2026-12-02', '11:05')), 1, 'Wednesday 2 Dec');
+  // Good Friday 2026-04-10 and Easter Monday 2026-04-13 (Orthodox Easter 12 April): summer time (13:05 = 10:05 UTC).
+  const e = sched(memory(), { reply: GOOD('2026-04-14') });
+  stored(e, '2026-04-09');
+  for (const t of [['2026-04-10', '10:05'], ['2026-04-10', '15:00'], ['2026-04-13', '10:05'], ['2026-04-13', '11:05']])
+    assert.equal(await asks(e, UTC(t[0], t[1])), 0, 'Easter ' + t.join(' '));
+  assert.equal(await asks(e, UTC('2026-04-14', '10:04')), 0);
+  assert.equal(await asks(e, UTC('2026-04-14', '10:05')), 1, 'Tuesday after Easter, EEST slot');
+});
+test('schedule: summer (EEST) and winter (EET) slot instants in UTC', async () => {
+  const su = sched(memory(), { reply: GOOD('2026-06-15') });
+  stored(su, '2026-06-12');
+  assert.equal(await asks(su, UTC('2026-06-15', '10:04')), 0, 'summer 13:04 = 10:04 UTC');
+  assert.equal(await asks(su, UTC('2026-06-15', '10:05')), 1, 'summer 13:05 = 10:05 UTC');
+  const wi = sched(memory(), { reply: GOOD('2026-01-12') });
+  stored(wi, '2026-01-09');
+  assert.equal(await asks(wi, UTC('2026-01-12', '11:04')), 0, 'winter 13:04 = 11:04 UTC');
+  assert.equal(await asks(wi, UTC('2026-01-12', '11:05')), 1, 'winter 13:05 = 11:05 UTC');
+  // The Monday after the October change (EET again from Sunday 25 Oct 01:00 UTC).
+  const oct = sched(memory(), { reply: GOOD('2026-10-26') });
+  stored(oct, '2026-10-23');
+  assert.equal(await asks(oct, UTC('2026-10-26', '10:05')), 0, 'EEST instant is not the slot any more');
+  assert.equal(await asks(oct, UTC('2026-10-26', '11:05')), 1);
+});
+test('schedule: the TV timezone does not matter (UTC clock + the EU rule)', async () => {
+  const old = process.env.TZ;
+  try {
+    for (const tz of ['America/Los_Angeles', 'Asia/Tokyo', 'Europe/Bucharest', 'UTC']) {
+      process.env.TZ = tz;
+      const ctx = sched(memory(), { reply: GOOD('2026-11-16') });
+      stored(ctx, '2026-11-13');
+      assert.equal(await asks(ctx, UTC('2026-11-16', '11:04')), 0, tz + ' 11:04 UTC');
+      assert.equal(await asks(ctx, UTC('2026-11-16', '11:05')), 1, tz + ' 11:05 UTC');
+    }
+  } finally {
+    if (old === undefined) delete process.env.TZ;
+    else process.env.TZ = old;
+  }
+});
+test('schedule: a TV switched on at 18:00 makes one catch-up request; first run with no data asks too', async () => {
+  const ctx = sched(memory(), { reply: GOOD('2026-11-16') });
+  stored(ctx, '2026-11-13');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '16:00')), 1, '18:00 local, catch-up');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '16:01')), 0);
+  assert.equal(await asks(ctx, UTC('2026-11-16', '19:00')), 0);
+  const first = sched(memory(), { reply: GOOD('2026-11-13') });
+  assert.equal(first.HomeInfo.finance.get().current, null);
+  assert.equal(await asks(first, UTC('2026-11-14', '12:00')), 1, 'no data at all, even on a Saturday');
+  assert.equal(first.HomeInfo.finance.get().current.date, '2026-11-13');
+  assert.equal(await asks(first, UTC('2026-11-14', '12:05')), 0);
+});
+test('schedule: errors do not use up a slot: retry after 10 minutes, at most 3 tries per slot, tries reset per slot', async () => {
+  const replies = { reply: NET },
+    ctx = sched(memory(), replies);
+  stored(ctx, '2026-11-13');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:05')), 1, 'try 1');
+  assert.equal(ctx.HomeInfo.finance.get().current.date, '2026-11-13', 'stored rates stay');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:09')), 0, 'under 10 min');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:15')), 1, 'try 2');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:20')), 0);
+  assert.equal(await asks(ctx, UTC('2026-11-16', '11:25')), 1, 'try 3');
+  for (const t of ['11:35', '11:50', '12:04'])
+    assert.equal(await asks(ctx, UTC('2026-11-16', t)), 0, 'three tries done: ' + t);
+  assert.equal(await asks(ctx, UTC('2026-11-16', '12:05')), 1, 'slot 2: fresh tries');
+  replies.reply = GOOD('2026-11-16');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '12:15')), 1, 'try 2 of slot 2 succeeds');
+  assert.equal(await asks(ctx, UTC('2026-11-16', '12:30')), 0);
+  // Service missing (update required) counts as no answer too.
+  const svc = sched(memory(), { reply: JSON.stringify({ returnValue: false, errorCode: -1 }) });
+  stored(svc, '2026-11-13');
+  assert.equal(await asks(svc, UTC('2026-11-16', '11:05')), 1);
+  assert.equal(await asks(svc, UTC('2026-11-16', '11:06')), 0);
+});
+test('schedule: corrupt persisted state means never asked; a future answer time never blocks', async () => {
+  for (const raw of ['{bad', 'null', '"x"', '{"answeredAt":"a","tries":-4,"slot":{},"tryAt":null}', '[]']) {
+    const mem = memory({ 'tvhome.bnr.sched.v1': raw }),
+      ctx = sched(mem, { reply: GOOD('2026-11-16') });
+    stored(ctx, '2026-11-13');
+    assert.equal(await asks(ctx, UTC('2026-11-16', '11:05')), 1, raw);
+  }
+  const fut = sched(memory({ 'tvhome.bnr.sched.v1': JSON.stringify({ answeredAt: UTC('2030-01-01', '00:00'), slot: 0, tries: 0, tryAt: 0 }) }), { reply: GOOD('2026-11-16') });
+  stored(fut, '2026-11-13');
+  assert.equal(await asks(fut, UTC('2026-11-16', '11:05')), 1);
+});
+test('schedule: scope off asks nothing (and no timer is needed); forced refresh is only a test seam', async () => {
+  const mem = memory(),
+    calls = [];
+  function Bridge() {}
+  Bridge.prototype.call = function () {
+    calls.push(1);
+    const self = this;
+    Promise.resolve().then(() => self.onservicecallback(GOOD('2026-11-16')));
+  };
+  Bridge.prototype.cancel = function () {};
+  const off = context(mem, { PalmServiceBridge: Bridge, setTimeout, clearTimeout });
+  off.HomeInfoFinance.setClock(() => UTC('2026-11-16', '11:05'));
+  assert.equal((await off.HomeInfoFinance.refreshIfDue()).skipped, true);
+  assert.equal(calls.length, 0, 'scope off: no request');
+  assert.equal((await off.HomeInfoFinance.refresh()).state, 'ok');
+  assert.equal(calls.length, 1, 'forced refresh still works');
 });
 (async () => {
   for (const [name, fn] of tests) {

@@ -12,10 +12,12 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
     page.evaluate(
       ([reply, seed]) => {
         InfoPanel.close();
-        ['tvhome.finance.v1', 'tvhome.daily.v1', 'tvhome.cache.v1.bnr'].forEach(
+        ['tvhome.finance.v1', 'tvhome.daily.v1', 'tvhome.cache.v1.bnr', 'tvhome.bnr.sched.v1'].forEach(
           (k) => localStorage.removeItem(k)
         );
         if (seed) localStorage.setItem(seed[0], seed[1]);
+        // The schedule runs on a fixed instant: Monday 16.11.2026 18:00 Romanian time (after both slots of the fixture day).
+        HomeInfoFinance.setClock(() => Date.parse('2026-11-16T16:00:00Z'));
         window.__calls = [];
         window.__reply = reply;
         if (reply !== 'absent') {
@@ -171,7 +173,7 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
     )
   );
 
-  // 6. Keys fall through to the panel; the refresh timer exists only while the page is shown.
+  // 6. Keys fall through to the panel; the (cheap, schedule-checking) 60 s timer exists only while the page is shown.
   await setup(good);
   await page.evaluate(() => {
     window.__live = 0;
@@ -180,7 +182,7 @@ const xml = fs.readFileSync('tests/info/fixtures/nbrfxrates.xml', 'utf8'),
     window.__ids = {};
     window.setInterval = function (fn, ms) {
       const id = set.call(window, fn, ms);
-      if (ms === 3 * 3600000) {
+      if (ms === 60000) {
         window.__ids[id] = true;
         window.__live++;
       }

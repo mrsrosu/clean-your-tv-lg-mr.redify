@@ -33,7 +33,7 @@ const assert = require('node:assert/strict'),
           window.__refresh++;
           return Promise.resolve({});
         };
-        HomeInfoFinance.refresh = function () {
+        HomeInfoFinance.refreshIfDue = function () {
           window.__refresh++;
           return Promise.resolve({});
         };

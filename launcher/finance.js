@@ -1,17 +1,32 @@
 /* Home info: BNR exchange rates page (info panel) and the "Rates & holidays" Settings tab, mr.redify only.
  *
  * Rates come from the Home Helper service method bnrRates (luna://com.gathin.tvhome.renewal), which returns the
- * BNR XML; the page never contacts the network itself. Cached 3 hours (HomeInfoFetch). When the service has no
- * bnrRates (Root edition, or a TV whose Home Helper was not reinstalled) the page shows "service update required".
+ * BNR XML; the page never contacts the network itself. When the service has no bnrRates (Root edition, or a TV whose
+ * Home Helper was not reinstalled) the page shows "service update required".
+ *
+ * Schedule (refreshIfDue): BNR publishes the day's rates shortly after 13:00 Romanian time on banking days (measured:
+ * 13:01 on 16.11.2026). A request is made only at the slots 13:05 and 14:05 Romanian time of a banking day (Monday to
+ * Friday, not a Romanian legal holiday): the first brings the new date; the second is sent only when the first did not
+ * (BNR late). A TV switched on later makes one catch-up request as soon as Home is in front. Romanian time comes from
+ * the device UTC clock with the EU summer-time rule, not from the TV's timezone setting. A request that gets no answer
+ * does not use up its slot: it is retried after 10 minutes, at most 3 tries per slot. Nothing is requested at any other
+ * time, so no periodic refresh exists; callers use refreshIfDue(), which costs nothing when nothing is due.
  *
  * Store HomeInfo.finance (tvhome.finance.v1): chosen currencies (1 to 8) plus the latest two published days
  * (current / previous), kept so the page can show an up/down arrow. The page has no keys of its own: Left/Right
- * fall through to the info panel. While the page is shown it refreshes every 3 hours; no timer otherwise.
+ * fall through to the info panel. While the page is shown a cheap 60 s check asks the schedule; no timer otherwise.
  */
 (function (root) {
   'use strict';
   var doc = root.document,
-    TTL = 3 * 3600000,
+    SCHED_KEY = 'tvhome.bnr.sched.v1', // { answeredAt, slot, tries, tryAt } (ms); corrupt = never asked
+    SLOT_1 = [13, 5],
+    SLOT_2 = [14, 5],
+    RETRY_MS = 10 * 60000,
+    MAX_TRIES = 3,
+    clock = function () {
+      return Date.now();
+    },
     MAX_CURRENCIES = 8,
     DEFAULTS = ['EUR', 'USD', 'GBP', 'CHF'],
     info = root.HomeInfo,
@@ -241,13 +256,131 @@
       throw error;
     });
   }
+  // ---- schedule: Romanian time from the UTC clock, banking days, slots ----
+  // UTC day of the last Sunday of a month (month 1-12).
+  function lastSunday(year, month) {
+    var last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return last - new Date(Date.UTC(year, month - 1, last)).getUTCDay();
+  }
+  // EEST (UTC+3) from the last Sunday of March 01:00 UTC to the last Sunday of October 01:00 UTC; else EET (UTC+2).
+  function isSummerTime(utcMs) {
+    var y = new Date(utcMs).getUTCFullYear();
+    return (
+      utcMs >= Date.UTC(y, 2, lastSunday(y, 3), 1) &&
+      utcMs < Date.UTC(y, 9, lastSunday(y, 10), 1)
+    );
+  }
+  function roOffsetMin(utcMs) {
+    return isSummerTime(utcMs) ? 180 : 120;
+  }
+  // Romanian calendar date and time of an instant.
+  function roLocal(utcMs) {
+    var d = new Date(utcMs + roOffsetMin(utcMs) * 60000);
+    return {
+      y: d.getUTCFullYear(),
+      m: d.getUTCMonth() + 1,
+      d: d.getUTCDate(),
+      h: d.getUTCHours(),
+      min: d.getUTCMinutes()
+    };
+  }
+  // The UTC instant of h:min Romanian time on a Romanian date.
+  function slotUtc(day, hm) {
+    var local = Date.UTC(day.y, day.m - 1, day.d, hm[0], hm[1]),
+      guess = local - 120 * 60000;
+    return isSummerTime(guess) ? local - 180 * 60000 : guess;
+  }
+  function prevDay(day) {
+    var d = new Date(Date.UTC(day.y, day.m - 1, day.d - 1));
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+  }
+  function isBankingDay(day) {
+    var dow = new Date(Date.UTC(day.y, day.m - 1, day.d)).getUTCDay(),
+      names = [];
+    if (dow < 1 || dow > 5) return false;
+    try {
+      names = root.HomeRoCalendar
+        ? root.HomeRoCalendar.holidayNames(day.y, day.m, day.d)
+        : [];
+    } catch (_) {}
+    return !names.length;
+  }
+  function iso(day) {
+    return day.y + '-' + two(day.m) + '-' + two(day.d);
+  }
+  // The rate date that must exist at this instant (the latest banking day whose first slot has passed) and the instant
+  // of the latest slot that has passed for it: { date, slot1, slot2, latest }. null when none is found.
+  function neededRate(now) {
+    var day = roLocal(now),
+      i;
+    day = { y: day.y, m: day.m, d: day.d };
+    if (now < slotUtc(day, SLOT_1)) day = prevDay(day);
+    for (i = 0; i < 20; i++) {
+      if (isBankingDay(day) && now >= slotUtc(day, SLOT_1)) {
+        var s1 = slotUtc(day, SLOT_1),
+          s2 = slotUtc(day, SLOT_2);
+        return { date: iso(day), slot1: s1, slot2: s2, latest: now >= s2 ? s2 : s1 };
+      }
+      day = prevDay(day);
+    }
+    return null;
+  }
+  function readSched() {
+    var out = { answeredAt: 0, slot: 0, tries: 0, tryAt: 0 },
+      raw;
+    try {
+      raw = JSON.parse(root.localStorage.getItem(SCHED_KEY));
+    } catch (_) {}
+    if (raw && typeof raw === 'object')
+      Object.keys(out).forEach(function (k) {
+        if (typeof raw[k] === 'number' && isFinite(raw[k]) && raw[k] >= 0)
+          out[k] = raw[k];
+      });
+    return out;
+  }
+  function writeSched(v) {
+    try {
+      root.localStorage.setItem(SCHED_KEY, JSON.stringify(v));
+    } catch (_) {}
+  }
+  // Is a request due at this instant, given the stored rates and the schedule record?
+  function isDue(now, current, sched) {
+    var need = neededRate(now),
+      tries;
+    if (!need) return false;
+    if (current && current.date >= need.date) return false;
+    // Something in the future (TV clock was wrong when it was written) never blocks a request.
+    if (current && sched.answeredAt >= need.latest && sched.answeredAt <= now)
+      return false;
+    tries = sched.slot === need.latest ? sched.tries : 0;
+    if (tries >= MAX_TRIES) return false;
+    if (tries > 0 && now - sched.tryAt < RETRY_MS && now >= sched.tryAt)
+      return false;
+    return true;
+  }
+  // Records the outcome of a request: an answer ends the slot; no answer counts a try (never more than 3 per slot).
+  function record(now, ok) {
+    var sched = readSched(),
+      need = neededRate(now),
+      slot = need ? need.latest : 0;
+    if (ok) writeSched({ answeredAt: now, slot: slot, tries: 0, tryAt: 0 });
+    else
+      writeSched({
+        answeredAt: sched.answeredAt,
+        slot: slot,
+        tries: (sched.slot === slot ? sched.tries : 0) + 1,
+        tryAt: now
+      });
+  }
+
   // Never rejects. state: ok | offline | update-required; fetchedAt = when the shown data was fetched (null: none).
-  function refresh() {
+  function request() {
     lastIssue = null;
     var cache = root.HomeInfoFetch;
     if (!cache)
       return root.Promise.resolve({ state: 'offline', fetchedAt: null });
-    return cache.cached('bnr', TTL, load).then(
+    // TTL 0: every call asks (the schedule decides when to call); the stored copy only serves as the stale fallback.
+    return cache.cached('bnr', 0, load).then(
       function (result) {
         var shown = result.fetchedAt;
         try {
@@ -269,6 +402,29 @@
         };
       }
     );
+  }
+
+  var pending = null;
+  // Forced request (test seam; the schedule is not consulted). Counts as a try or an answer for the schedule.
+  function refresh() {
+    if (pending) return pending;
+    pending = request().then(function (result) {
+      pending = null;
+      record(clock(), result.state === 'ok');
+      return result;
+    });
+    return pending;
+  }
+  var IDLE = { state: 'idle', fetchedAt: null, skipped: true };
+  // The only entry point of consumers (page, widgets, idle screen): asks BNR only when the schedule says so. Never
+  // rejects; costs nothing (no request, no timer) otherwise or with the scope off.
+  function refreshIfDue() {
+    if (!store || (info && info.isMrRedify && !info.isMrRedify()))
+      return root.Promise.resolve(IDLE);
+    if (pending) return pending;
+    if (!isDue(clock(), store.get().current, readSched()))
+      return root.Promise.resolve(IDLE);
+    return refresh();
   }
 
   // ---- page ----
@@ -358,7 +514,8 @@
     if (status) host.appendChild(el('div', 'fin-status', status));
   }
   function update() {
-    return refresh().then(function (result) {
+    return refreshIfDue().then(function (result) {
+      if (result.skipped) return; // nothing was due: keep what the page shows
       last = result;
       if (visible) render();
     });
@@ -368,7 +525,8 @@
     last = null;
     render();
     update();
-    if (!timer) timer = root.setInterval(update, TTL);
+    // A cheap check every minute while the page is shown (a slot can come up while it is open); no request unless due.
+    if (!timer) timer = root.setInterval(update, 60000);
   }
   function onHide() {
     visible = false;
@@ -524,14 +682,14 @@
     refreshChips();
     refreshHint();
     // Tabs are built at load, so nothing is fetched then. When focus first enters the pane (scope on only),
-    // learn the available codes and the service state; cached for 3 hours, so cheap on later visits.
+    // learn the available codes and the service state; only when the BNR schedule says a request is due.
     var busy = false;
     pane.addEventListener('focusin', function () {
       if (busy || !info.isMrRedify()) return;
       busy = true;
-      refresh().then(function (result) {
+      refreshIfDue().then(function (result) {
         busy = false;
-        last = result;
+        if (!result.skipped) last = result;
         if (codes().join() !== shown) refreshChips(); // keep the focused chip while nothing changed
         refreshHint();
       });
@@ -544,7 +702,16 @@
     trend: trend,
     idleLines: idleLines,
     landingCard: landingCard,
-    refresh: refresh
+    refresh: refresh,
+    refreshIfDue: refreshIfDue,
+    // Schedule (pure, exported for tests).
+    roLocal: roLocal,
+    isSummerTime: isSummerTime,
+    neededRate: neededRate,
+    isDue: isDue,
+    setClock: function (fn) {
+      clock = typeof fn === 'function' ? fn : Date.now.bind(Date);
+    }
   };
   if (info && store) {
     if (info.registerTab)

@@ -62,7 +62,7 @@ async function seed(page, opts) {
         );
       }
       window.__calls = { rates: 0, football: 0 };
-      HomeInfoFinance.refresh = () => {
+      HomeInfoFinance.refreshIfDue = () => {
         window.__calls.rates++;
         return Promise.resolve({});
       };
@@ -202,7 +202,9 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
     HomeCalendar.setClock(() => new Date(2026, 10, 16, 12, 0, 0));
     HomeLanding.render();
   });
-  assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 1, football: 1 });
+  // Rates go through their schedule (refreshIfDue: a request only at the BNR slots, decided in finance.js), football hourly.
+  let c0 = await page.evaluate(() => window.__calls);
+  assert.ok(c0.rates >= 1 && c0.football === 1, 'schedule check and first football refresh on activation: ' + JSON.stringify(c0));
 
   // 3. Month grid: all 30 days, weekday header from the week start, today filled, nothing else marked.
   const grid = await page.evaluate(() => {
@@ -529,14 +531,16 @@ const overlap = (a, b) => a && b && a.left < b.right && b.left < a.right && a.to
   assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 0, football: 0 }, 'OFF: no refresh in 3 h');
   assert.equal((await state(page)).timer, false);
   await toggles(page, ALL);
-  assert.deepEqual(await page.evaluate(() => window.__calls), { rates: 1, football: 1 }, 'first refresh on activation');
+  c0 = await page.evaluate(() => window.__calls);
+  assert.ok(c0.rates >= 1 && c0.football === 1, 'first checks on activation: ' + JSON.stringify(c0));
   // Midnight passed: the grid highlights the new day after the minute timer.
   await page.evaluate(() => HomeCalendar.setClock(() => new Date()));
   await page.clock.runFor(3 * 60000);
   assert.equal(await page.locator('#landingWidgets .lw-today').textContent(), '17');
   await page.clock.runFor(2 * 3600000 + 5 * 60000);
   const afterTwoHours = await page.evaluate(() => window.__calls);
-  assert.deepEqual(afterTwoHours, { rates: 3, football: 3 }, 'one refresh per hour, not more: ' + JSON.stringify(afterTwoHours));
+  assert.equal(afterTwoHours.football, 3, 'football: one refresh per hour, not more: ' + JSON.stringify(afterTwoHours));
+  assert.ok(afterTwoHours.rates >= 100, 'the rates schedule is asked on the minute tick (it costs nothing unless a slot is due): ' + afterTwoHours.rates);
   await home.setScope(false);
   const before = await page.evaluate(() => window.__calls);
   await page.clock.runFor(3 * 3600000);
